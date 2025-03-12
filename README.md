@@ -1,12 +1,16 @@
 # CrewAI Chat UI
 
-A web interface for interacting with CrewAI crews through a chat-based UI.
+A modern web interface for interacting with CrewAI crews through an intuitive, feature-rich chat UI.
 
 ## Features
 
-- 🌐 **Web Interface**: Easy-to-use chat UI for interacting with your CrewAI crews
+- 🌐 **Modern Web Interface**: Sleek, responsive chat UI for interacting with your CrewAI crews
 - 🔍 **Auto-Discovery**: Automatically finds and loads your crew from the current directory
-- 🎮 **Interactive**: Real-time chat with your AI crew
+- 🎮 **Interactive**: Real-time chat with typing indicators and message formatting
+- 📋 **Chat History**: Save and manage conversation threads with local storage
+- 🗑️ **Thread Management**: Create new chats and delete old conversations
+- 🔄 **State Persistence**: Conversations are saved and can be resumed
+- 📱 **Responsive Design**: Optimized for various screen sizes
 - 🚀 **Easy to Use**: Simple installation and setup process
 
 ## Installation
@@ -49,11 +53,11 @@ crewai-chat-ui
 
 The CrewAI Chat UI:
 
-1. Searches for crew.py or *_crew.py files in your current directory and subdirectories
+1. Searches for crew.py or *_crew.py files in your current directory
 2. Loads your crew instance
 3. Uses the crew's chat_llm to initialize a chat interface
-4. Analyzes your crew to understand its purpose and required inputs
-5. Provides a web-based UI for interacting with your crew
+4. Provides a modern web-based UI for interacting with your crew
+5. Manages chat history using local storage for persistent conversations
 
 ## Configuration
 
@@ -82,7 +86,20 @@ pyproject.toml          # Package configuration
 README.md               # Documentation
 ```
 
-### Building the Package
+### UI Features
+
+#### Chat History Management
+
+The UI provides several ways to manage your conversations:
+
+- **Create New Chat**: Click the "New Chat" button in the sidebar to start a fresh conversation
+- **View Past Conversations**: All your conversations are saved and accessible from the sidebar
+- **Delete Conversations**: Each conversation in the sidebar has a delete button (trash icon) to remove unwanted threads
+- **Clear Current Chat**: The "Clear" button in the header removes all messages in the current conversation while keeping the thread
+
+### Development
+
+#### Building the Package
 
 To build the package:
 
@@ -92,6 +109,8 @@ python -m build
 ```
 
 The package will be available in the `dist/` directory.
+
+
 
 ## License
 
