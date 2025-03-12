@@ -1,8 +1,12 @@
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 import threading
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 import click
 from flask import Flask, request, jsonify, render_template, send_from_directory
@@ -36,12 +40,27 @@ def chat():
     """API endpoint to handle chat messages."""
     data = request.json
     user_message = data.get("message", "")
+    logging.info(f"Received chat message: {user_message}")
 
     if not user_message:
+        logging.warning("No message provided in request")
         return jsonify({"error": "No message provided"}), 400
 
-    response = chat_handler.process_message(user_message)
-    return jsonify(response)
+    try:
+        logging.info("Processing message with chat_handler")
+        response = chat_handler.process_message(user_message)
+        logging.info(f"Response from chat_handler: {response}")
+        
+        # Ensure we have content in the response
+        if not response.get("content") and response.get("status") == "success":
+            logging.warning("Response content is empty despite successful status")
+            response["content"] = "I'm sorry, but I couldn't generate a response. Please try again."
+        
+        return jsonify(response)
+    except Exception as e:
+        error_message = f"Error processing chat message: {str(e)}"
+        logging.error(error_message, exc_info=True)
+        return jsonify({"status": "error", "content": error_message}), 500
 
 
 @app.route("/api/initialize", methods=["GET"])
