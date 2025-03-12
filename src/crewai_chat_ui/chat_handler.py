@@ -122,7 +122,13 @@ class ChatHandler:
                 messages=[{"role": "system", "content": system_message}]
             )
             
-            logging.info(f"Introductory message from LLM: {introductory_message}")
+            # Log a shorter version of the introductory message for debugging
+            if isinstance(introductory_message, str):
+                log_message = introductory_message[:50] + '...' if len(introductory_message) > 50 else introductory_message
+            else:
+                log_message = str(introductory_message)[:50] + '...'
+                
+            logging.debug(f"Received introductory message: {log_message}")
             
             # Handle string or dictionary response
             if isinstance(introductory_message, str):
@@ -143,7 +149,6 @@ class ChatHandler:
             # Track the sanitized name from the tool schema
             sanitized_function_name = self.crew_tool_schema['function']['name']
             original_name = self.crew_chat_inputs.crew_name
-            logging.info(f"Original function name: {original_name}, sanitized to: {sanitized_function_name}")
             
             # Set up available functions using the sanitized name
             self.available_functions = {
@@ -152,7 +157,6 @@ class ChatHandler:
             
             # Add the original name as well as a fallback
             if original_name != sanitized_function_name:
-                logging.info(f"Adding original name {original_name} as fallback")
                 self.available_functions[original_name] = self._create_tool_function()
             
             self.is_initialized = True
@@ -174,7 +178,7 @@ class ChatHandler:
         chars = "-\|/"
         i = 0
         while not event.is_set():
-            logging.info(f"Processing... {chars[i % len(chars)]}")
+            logging.debug(f"Processing... {chars[i % len(chars)]}")
             i += 1
             time.sleep(0.5)
     
@@ -207,9 +211,9 @@ class ChatHandler:
         loading_thread.start()
         
         try:
-            # Ensure chat_llm is initialized
-            logging.info(f"Sending messages to LLM: {self.messages}")
-            logging.info(f"Using tool schema: {self.crew_tool_schema}")
+            # Ensure chat_llm is initialized - log minimal info
+            logging.debug("Sending messages to LLM")
+            logging.debug(f"Using tool schema name: {self.crew_tool_schema['function']['name']}")
                 
             # Call the LLM with the updated messages including tool schema and available functions
             response = self.chat_llm.call(
@@ -218,12 +222,9 @@ class ChatHandler:
                 available_functions=self.available_functions
             )
             
-            logging.info(f"Received response from LLM: {response}")
-            
             # Handle the response
             # Check if response is a string or dictionary
             if isinstance(response, str):
-                logging.info("Response is a string")
                 # If response is an empty string, provide fallback content
                 if not response.strip():
                     logging.warning("Empty string response from LLM, providing fallback")
@@ -232,7 +233,6 @@ class ChatHandler:
                     content = response
                 tool_calls = []
             else:
-                logging.info(f"Response is a {type(response)}")
                 # It's a dictionary or similar object with get method
                 content = response.get("content", "")
                 # If content is empty but we have a response object, provide fallback
@@ -241,8 +241,8 @@ class ChatHandler:
                     content = "I'll help you with that. Let me process your request about AI agents in 2024."
                 tool_calls = response.get("tool_calls", [])
                 
-            logging.info(f"Extracted content: {content}")
-            logging.info(f"Extracted tool_calls: {tool_calls}")
+            logging.debug(f"Extracted content length: {len(content) if content else 0}")
+            logging.debug(f"Number of tool calls: {len(tool_calls) if tool_calls else 0}")
             
             # Add assistant response to messages
             self.messages.append({"role": "assistant", "content": content})
@@ -263,30 +263,28 @@ class ChatHandler:
                     # Type cast to allow adding to messages list
                     self.messages.append(cast(Dict[str, Any], tool_call_message))
                     
-                    # Log the available functions and received function name
-                    logging.info(f"Tool call requested function: '{function_name}'")
-                    logging.info(f"Available functions: {list(self.available_functions.keys())}")
-                    
                     # Try to find a matching function, even with slight name differences
                     function_to_call = None
                     if function_name in self.available_functions:
                         function_to_call = self.available_functions[function_name]
-                        logging.info(f"Found exact match for function: {function_name}")
                     else:
                         # Try case-insensitive matching as fallback
                         function_name_lower = function_name.lower()
                         for available_name in self.available_functions:
                             if available_name.lower() == function_name_lower:
                                 function_to_call = self.available_functions[available_name]
-                                logging.info(f"Found case-insensitive match: {available_name} for requested: {function_name}")
                                 break
+                                
+                    # Log the result, but only if there's a problem
+                    if not function_to_call:
+                        logging.warning(f"Tool call requested unknown function '{function_name}'. Available: {list(self.available_functions.keys())}")
                     
                     # Execute the function if found
                     if function_to_call:
                         # Handle parsing function arguments
                         try:
                             function_args_dict = json.loads(function_args)
-                            logging.info(f"Calling function {function_name} with args: {function_args_dict}")
+                            logging.debug(f"Calling function {function_name}")
                             function_response = function_to_call(**function_args_dict)
                         except json.JSONDecodeError as e:
                             logging.error(f"Error parsing function arguments: {str(e)}")
@@ -303,8 +301,8 @@ class ChatHandler:
                         }
                         self.messages.append(tool_response_message)
                         
-                        # Log that we're processing the function response
-                        logging.info(f"Processing function response: {function_response[:100]}...")
+                        # Log that we're processing the function response (minimal info)
+                        logging.debug("Processing function response")
                         
                         # Get LLM to summarize the function response with appropriate parameters
                         try:
@@ -341,7 +339,7 @@ class ChatHandler:
                 "content": content,
                 "has_tool_call": bool(tool_calls)
             }
-            logging.info(f"Returning success result: {result}")
+            logging.debug("Returning success result")
             return result
             
         except Exception as e:
@@ -354,7 +352,7 @@ class ChatHandler:
                 "content": error_message,
                 "has_tool_call": False
             }
-            logging.info(f"Returning error result: {result}")
+            logging.debug("Returning error result")
             return result
         finally:
             # Stop loading indicator
