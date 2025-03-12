@@ -30,9 +30,45 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Initialize the chat
-    initializeChat();
+    // Load chat history
     loadChatHistory();
+    
+    // Always initialize the chat with the backend
+    initializeChat();
+    
+    // Function to load a chat by ID
+    function loadChatById(id) {
+        const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
+        const history = JSON.parse(storedHistory);
+        
+        if (history[id]) {
+            chatId = id;
+            conversationHistory = history[id].messages || [];
+            
+            // Update UI to mark this chat as active
+            document.querySelectorAll('.chat-history-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('data-chat-id') === chatId) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Clear current messages
+            messagesContainer.innerHTML = '';
+            
+            // Add welcome message
+            addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
+            
+            // Load messages
+            conversationHistory.forEach(msg => {
+                addMessage(msg.role, msg.content);
+            });
+            
+            return true;
+        }
+        
+        return false;
+    }
     
     // Event listeners
     sendButton.addEventListener('click', sendMessage);
@@ -96,31 +132,61 @@ document.addEventListener('DOMContentLoaded', function() {
                     crewNameElement.textContent = data.crew_name;
                     crewDescriptionElement.textContent = data.crew_description;
                     
-                    // Remove any existing welcome messages
-                    const existingWelcomes = messagesContainer.querySelectorAll('.system-message');
-                    existingWelcomes.forEach(msg => msg.remove());
+                    // Check if we have existing chats
+                    const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
+                    const history = JSON.parse(storedHistory);
                     
-                    // First add a standard welcome message
-                    addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
-                    
-                    // Then add the crew's initial message as an assistant message if it exists
-                    if (data.message && data.message.trim()) {
-                        // Add the actual crew message
-                        addMessage('assistant', data.message);
-                        
-                        // Save this initial message to conversation history
-                        conversationHistory.push({ role: 'assistant', content: data.message });
-                        saveChatToHistory(chatId, 'New Chat', conversationHistory);
+                    if (Object.keys(history).length > 0) {
+                        // Use the most recent chat
+                        const sortedHistory = getSortedChatHistory(history);
+                        if (sortedHistory.length > 0) {
+                            // Load the most recent chat
+                            loadChatById(sortedHistory[0].id);
+                        } else {
+                            // Create a new chat if something went wrong
+                            createNewChat(data.message);
+                        }
+                    } else {
+                        // No existing chats, create a new one
+                        createNewChat(data.message);
                     }
                 } else {
+                    // Display error message
+                    messagesContainer.innerHTML = '';
+                    addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
                     addMessage('assistant', 'Error initializing chat: ' + data.message);
                 }
             })
             .catch(error => {
                 removeLoadingMessage();
+                messagesContainer.innerHTML = '';
+                addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
                 addMessage('assistant', 'Error initializing chat. Please check if your crew is correctly set up.');
                 console.error('Error:', error);
             });
+    }
+    
+    function createNewChat(initialMessage) {
+        // Clear messages container
+        messagesContainer.innerHTML = '';
+        
+        // Add welcome message
+        addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
+        
+        // Add the crew's initial message if it exists
+        if (initialMessage && initialMessage.trim()) {
+            addMessage('assistant', initialMessage);
+            
+            // Update conversation history
+            conversationHistory = [{ role: 'assistant', content: initialMessage }];
+            
+            // Save to chat history
+            saveChatToHistory(chatId, 'New Chat', conversationHistory);
+        } else {
+            // Empty conversation history
+            conversationHistory = [];
+            saveChatToHistory(chatId, 'New Chat', conversationHistory);
+        }
     }
     
     function sendMessage() {
@@ -328,6 +394,7 @@ document.addEventListener('DOMContentLoaded', function() {
         sortedHistory.forEach(chat => {
             const historyItem = document.createElement('div');
             historyItem.className = 'chat-history-item';
+            historyItem.setAttribute('data-chat-id', chat.id);
             if (chat.id === chatId) {
                 historyItem.classList.add('active');
             }
