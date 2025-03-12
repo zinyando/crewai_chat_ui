@@ -8,8 +8,8 @@ import click
 from flask import Flask, request, jsonify, render_template, send_from_directory
 import importlib.resources as pkg_resources
 
-from crew_loader import load_crew
-from chat_handler import ChatHandler
+from crewai_chat_ui.crew_loader import load_crew
+from crewai_chat_ui.chat_handler import ChatHandler
 
 
 # Create Flask app

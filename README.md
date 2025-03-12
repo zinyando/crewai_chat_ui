@@ -68,15 +68,18 @@ The chat UI uses the following configuration from your crew:
 ### Project Structure
 
 ```
-crewai_chat_ui/
-├── __init__.py        # Package initialization
-├── server.py          # Web server implementation
-├── crew_loader.py     # Logic to load user's crew
-├── chat_handler.py    # Chat functionality
-└── static/            # Frontend assets
-    ├── index.html     # Main UI page
-    ├── styles.css     # Styling
-    └── scripts.js     # Client-side functionality
+src/
+└── crewai_chat_ui/
+    ├── __init__.py        # Package initialization
+    ├── server.py          # Web server implementation
+    ├── crew_loader.py     # Logic to load user's crew
+    ├── chat_handler.py    # Chat functionality
+    └── static/            # Frontend assets
+        ├── index.html     # Main UI page
+        ├── styles.css     # Styling
+        └── scripts.js     # Client-side functionality
+pyproject.toml          # Package configuration
+README.md               # Documentation
 ```
 
 ### Building the Package

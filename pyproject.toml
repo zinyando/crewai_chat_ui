@@ -22,3 +22,13 @@ crewai-chat-ui = "crewai_chat_ui.server:main"
 [project.urls]
 "Homepage" = "https://github.com/yourusername/crewai-chat-ui"
 "Bug Tracker" = "https://github.com/yourusername/crewai-chat-ui/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["crewai_chat_ui*"]
+
+[tool.setuptools.package-data]
+crewai_chat_ui = ["static/*"]
