@@ -77,6 +77,7 @@ def find_crew_module():
 def load_crew() -> Tuple[Crew, Optional[str]]:
     """
     Load the crew instance from the user's project.
+    Specifically looks for classes with crew methods.
 
     Returns:
         Tuple[Crew, str]: A tuple containing the crew instance and crew name
@@ -100,113 +101,39 @@ def load_crew() -> Tuple[Crew, Optional[str]]:
         crew_instance = None
         crew_name = None
 
-        # First look for common variable names that might be crew instances
-        common_crew_vars = ["crew", "my_crew", "the_crew", "ai_crew", "agent_crew"]
-        for var_name in common_crew_vars:
-            if hasattr(module, var_name):
-                attr = getattr(module, var_name)
-                if isinstance(attr, Crew):
-                    crew_instance = attr
-                    crew_name = var_name
-                    break
+        # Look for classes that might have a crew method
+        print("Looking for classes with crew methods...")
+        for attr_name in dir(module):
+            if attr_name.startswith("__"):  # Skip built-in attributes
+                continue
 
-        # If no common variables found, check all attributes
-        if crew_instance is None:
-            for attr_name in dir(module):
-                if attr_name.startswith("__"):  # Skip built-in attributes
-                    continue
-                attr = getattr(module, attr_name)
-                if isinstance(attr, Crew):
-                    crew_instance = attr
-                    crew_name = attr_name
-                    break
-
-        if crew_instance is None:
-            # First check common function names
-            common_func_names = [
-                "get_crew",
-                "create_crew",
-                "build_crew",
-                "init_crew",
-                "setup_crew",
-                "make_crew",
-            ]
-
-            # Special case: if there's a function named 'crew', try calling it
-            if hasattr(module, "crew") and callable(getattr(module, "crew")):
-                crew_func = getattr(module, "crew")
+            attr = getattr(module, attr_name)
+            if isinstance(attr, type):  # Check if it's a class
+                print(f"  Found class: {attr_name}")
                 try:
-                    result = crew_func()
-                    if isinstance(result, Crew):
-                        crew_instance = result
-                        crew_name = "crew"
-                except Exception:
-                    pass
+                    # Try to instantiate the class
+                    instance = attr()
 
-            # Try other common function names
-            if crew_instance is None:
-                for func_name in common_func_names:
-                    if hasattr(module, func_name):
-                        attr = getattr(module, func_name)
-                        if callable(attr):
-                            try:
-                                result = attr()
-                                if isinstance(result, Crew):
-                                    crew_instance = result
-                                    crew_name = func_name
-                                    break
-                            except Exception:
-                                continue
-
-            # If still no crew found, check all callable attributes with common prefixes
-            if crew_instance is None:
-                for attr_name in dir(module):
-                    if attr_name.startswith("__"):  # Skip built-in functions
-                        continue
-                    attr = getattr(module, attr_name)
-                    if callable(attr) and attr_name.lower().startswith(
-                        ("get_", "create_", "build_", "init_", "setup_", "make_")
+                    # Look for crew methods on the instance
+                    if hasattr(instance, "crew") and callable(
+                        getattr(instance, "crew")
                     ):
                         try:
-                            result = attr()
+                            result = instance.crew()
                             if isinstance(result, Crew):
                                 crew_instance = result
-                                crew_name = attr_name
+                                crew_name = f"{attr_name}.crew"
                                 break
-                        except Exception:
-                            continue
-
-        # If we still haven't found a crew, look for classes that might have a crew method
-        if crew_instance is None:
-            for attr_name in dir(module):
-                if attr_name.startswith("__"):  # Skip built-in attributes
+                        except Exception as e:
+                            print(f"  Error calling {attr_name}.crew(): {e}")
+                except Exception as e:
+                    print(f"  Error instantiating class {attr_name}: {e}")
                     continue
-
-                attr = getattr(module, attr_name)
-                if isinstance(attr, type):  # Check if it's a class
-                    try:
-                        # Try to instantiate the class
-                        instance = attr()
-
-                        # Look for crew methods on the instance
-                        if hasattr(instance, "crew") and callable(
-                            getattr(instance, "crew")
-                        ):
-                            try:
-                                result = instance.crew()
-                                if isinstance(result, Crew):
-                                    crew_instance = result
-                                    crew_name = f"{attr_name}.crew"
-                                    break
-                            except Exception:
-                                pass
-                    except Exception:
-                        continue
 
         if crew_instance is None:
             raise ValueError(
-                "Could not find a Crew instance, a function returning Crew, or a class with a crew method. "
-                "Please ensure your file contains a Crew instance or a function that returns one."
+                "Could not find a class with a crew method. "
+                "Please ensure your file contains a class with a method that returns a Crew instance."
             )
 
         # Ensure crew_name is not None before returning
