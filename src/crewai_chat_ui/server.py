@@ -17,51 +17,50 @@ app = Flask(__name__)
 chat_handler = None
 
 
-@app.route('/')
+@app.route("/")
 def index():
     """Serve the main chat interface."""
-    static_dir = Path(__file__).parent / 'static'
-    return send_from_directory(static_dir, 'index.html')
+    static_dir = Path(__file__).parent / "static"
+    return send_from_directory(static_dir, "index.html")
 
 
-@app.route('/static/<path:path>')
+@app.route("/static/<path:path>")
 def serve_static(path):
     """Serve static files."""
-    static_dir = Path(__file__).parent / 'static'
+    static_dir = Path(__file__).parent / "static"
     return send_from_directory(static_dir, path)
 
 
-@app.route('/api/chat', methods=['POST'])
+@app.route("/api/chat", methods=["POST"])
 def chat():
     """API endpoint to handle chat messages."""
     data = request.json
-    user_message = data.get('message', '')
-    
+    user_message = data.get("message", "")
+
     if not user_message:
         return jsonify({"error": "No message provided"}), 400
-    
+
     response = chat_handler.process_message(user_message)
     return jsonify(response)
 
 
-@app.route('/api/initialize', methods=['GET'])
+@app.route("/api/initialize", methods=["GET"])
 def initialize():
     """Initialize the chat handler and return initial message."""
     try:
         initial_message = chat_handler.initialize()
-        return jsonify({
-            "status": "success",
-            "message": initial_message,
-            "required_inputs": [
-                {
-                    "name": field.name,
-                    "description": field.description
-                } 
-                for field in chat_handler.crew_chat_inputs.inputs
-            ],
-            "crew_name": chat_handler.crew_name,
-            "crew_description": chat_handler.crew_chat_inputs.crew_description
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "message": initial_message,
+                "required_inputs": [
+                    {"name": field.name, "description": field.description}
+                    for field in chat_handler.crew_chat_inputs.inputs
+                ],
+                "crew_name": chat_handler.crew_name,
+                "crew_description": chat_handler.crew_chat_inputs.crew_description,
+            }
+        )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -80,21 +79,20 @@ def show_loading(stop_event, message):
 def main():
     """Main entry point for the CLI."""
     global chat_handler
-    
+
     click.echo("CrewAI Chat UI - Starting up...")
-    
+
     try:
         # Try to load the crew
         click.echo("Loading crew from current directory...")
-        
+
         # Show loading indicator for crew loading
         stop_loading = threading.Event()
         loading_thread = threading.Thread(
-            target=show_loading, 
-            args=(stop_loading, "Searching for crew files")
+            target=show_loading, args=(stop_loading, "Searching for crew files")
         )
         loading_thread.start()
-        
+
         try:
             crew, crew_name = load_crew()
             stop_loading.set()
@@ -104,21 +102,36 @@ def main():
             stop_loading.set()
             loading_thread.join()
             click.echo(f"Error loading crew: {str(e)}", err=True)
+
+            # Add helpful debugging information
+            click.echo("\nFor debugging help:")
+            click.echo(
+                "1. Make sure your crew.py file contains a Crew instance or a function that returns one"
+            )
+            click.echo(
+                "2. If using a function, name it 'crew', 'get_crew', 'create_crew', or similar"
+            )
+            click.echo(
+                "3. Check that your CrewAI imports are correct for your installed version"
+            )
+            click.echo(
+                "4. Run your crew file directly with 'python crew.py' to test it"
+            )
             sys.exit(1)
-        
+
         # Initialize the chat handler
         chat_handler = ChatHandler(crew, crew_name)
-        
+
         # Start the Flask server
-        host = '0.0.0.0'  # Listen on all interfaces
-        port = 5000
-        
+        host = "0.0.0.0"  # Listen on all interfaces
+        port = 3100
+
         click.echo(f"Starting web server at http://localhost:{port}")
         click.echo(f"Access the chat UI in your browser")
         click.echo("Press Ctrl+C to stop the server")
-        
+
         app.run(host=host, port=port, debug=False)
-        
+
     except KeyboardInterrupt:
         click.echo("\nServer stopped")
     except Exception as e:
