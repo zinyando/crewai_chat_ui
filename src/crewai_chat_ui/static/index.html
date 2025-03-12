@@ -5,22 +5,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CrewAI Chat</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <h1 id="crew-name">CrewAI Chat</h1>
-            <p id="crew-description"></p>
-        </div>
-        
-        <div class="chat-messages" id="chat-messages">
-            <!-- Messages will be inserted here -->
-        </div>
-        
-        <div class="chat-input">
-            <textarea id="user-input" placeholder="Type your message here..."></textarea>
-            <button id="send-button">Send</button>
-        </div>
+    <div class="app-container">
+        <!-- Left Sidebar with possible threads/history -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-robot"></i> CrewAI</h2>
+            </div>
+            <button class="new-chat-btn"><i class="fa-solid fa-plus"></i> New Chat</button>
+            <div class="chat-history" id="chat-history">
+                <!-- Chat history entries will be added here -->
+            </div>
+            <div class="sidebar-footer">
+                <p>Powered by CrewAI</p>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-container">
+            <div class="chat-header">
+                <div class="current-chat-info">
+                    <h1 id="crew-name">CrewAI Chat</h1>
+                    <p id="crew-description">AI-powered assistant</p>
+                </div>
+                <div class="header-actions">
+                    <button class="action-btn" id="clear-btn" title="Clear conversation">
+                        <i class="fa-solid fa-broom"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <!-- Initial welcome message -->
+                <div class="message system-message">
+                    <div class="message-content">
+                        <p>Welcome to CrewAI Chat! How can I assist you today?</p>
+                    </div>
+                </div>
+                <!-- More messages will be inserted here -->
+            </div>
+            
+            <div class="chat-input-container">
+                <div class="chat-input-wrapper">
+                    <textarea id="user-input" placeholder="Type your message here..."></textarea>
+                    <div class="input-actions">
+                        <button class="action-btn" id="upload-btn" title="Upload file">
+                            <i class="fa-solid fa-paperclip"></i>
+                        </button>
+                        <button class="action-btn" id="mic-btn" title="Voice input">
+                            <i class="fa-solid fa-microphone"></i>
+                        </button>
+                    </div>
+                </div>
+                <button id="send-button" class="send-button">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </main>
     </div>
     
     <script src="/static/scripts.js"></script>
