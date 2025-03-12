@@ -270,6 +270,35 @@ document.addEventListener('DOMContentLoaded', function() {
         updateChatHistoryUI();
     }
     
+    function deleteChatFromHistory(id) {
+        const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
+        const history = JSON.parse(storedHistory);
+        
+        if (history[id]) {
+            delete history[id];
+            localStorage.setItem('crewai_chat_history', JSON.stringify(history));
+            
+            // If we deleted the active chat, create a new one
+            if (id === chatId) {
+                // Create new chat session
+                chatId = generateChatId();
+                conversationHistory = [];
+                
+                // Clear messages except welcome
+                const messages = messagesContainer.querySelectorAll('.message:not(.system-message)');
+                messages.forEach(msg => msg.remove());
+                
+                // Re-initialize
+                initializeChat();
+            }
+            
+            updateChatHistoryUI();
+            return true;
+        }
+        
+        return false;
+    }
+    
     function loadChatHistory() {
         const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
         const history = JSON.parse(storedHistory);
@@ -303,14 +332,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 historyItem.classList.add('active');
             }
             
+            // Create container for chat info (icon and title)
+            const chatInfo = document.createElement('div');
+            chatInfo.className = 'chat-info';
+            
             const chatIcon = document.createElement('i');
             chatIcon.className = 'fa-solid fa-message';
             
             const chatTitle = document.createElement('span');
+            chatTitle.className = 'chat-title';
             chatTitle.textContent = chat.title || 'New Chat';
             
-            historyItem.appendChild(chatIcon);
-            historyItem.appendChild(chatTitle);
+            // Add delete button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-chat-btn';
+            deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            deleteBtn.title = 'Delete this conversation';
+            
+            // Add event listener for delete button with stopPropagation to prevent triggering parent click
+            deleteBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (confirm('Are you sure you want to delete this conversation?')) {
+                    deleteChatFromHistory(chat.id);
+                }
+            });
+            
+            // Append elements
+            chatInfo.appendChild(chatIcon);
+            chatInfo.appendChild(chatTitle);
+            
+            historyItem.appendChild(chatInfo);
+            historyItem.appendChild(deleteBtn);
             
             historyItem.addEventListener('click', function() {
                 // Load this chat
