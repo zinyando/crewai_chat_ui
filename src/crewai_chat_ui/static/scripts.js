@@ -302,8 +302,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // If a crew ID is provided, update the current crew ID
         if (crewId) {
             currentCrewId = crewId;
-            // Also update the URL with the crew ID
-            updateUrlWithCrewId(crewId);
+            // Also update the URL with the crew ID and chat ID if available
+            if (chatId) {
+                updateUrlWithIds(crewId, chatId);
+            } else {
+                updateUrlWithCrewId(crewId);
+            }
         }
         
         addLoadingMessage();
@@ -316,14 +320,24 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         };
         
-        // If a specific crew ID is provided, use POST method with the crew ID
+        // Include both crew ID and chat ID in the request to ensure thread persistence
+        const requestData = {};
+        
         if (crewId) {
-            options.method = 'POST';
-            options.body = JSON.stringify({ crew_id: crewId });
+            requestData.crew_id = crewId;
         } else if (currentCrewId) {
-            // If we already have a current crew ID but no new one is provided, use it
+            requestData.crew_id = currentCrewId;
+        }
+        
+        if (chatId) {
+            requestData.chat_id = chatId;
+        }
+        
+        // If we have any data to send, use POST method
+        if (Object.keys(requestData).length > 0) {
             options.method = 'POST';
-            options.body = JSON.stringify({ crew_id: currentCrewId });
+            options.body = JSON.stringify(requestData);
+            console.log(`Initializing chat with data:`, requestData);
         }
         
         fetch(url, options)
@@ -348,8 +362,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     
-                    // Create a new chat with this crew
-                    createNewChat(data.message);
+                    // Create a new chat with this crew and the current chat ID
+                    // This ensures the messages stay in the correct thread
+                    createNewChat(data.message, chatId);
                 } else {
                     // Even on error, maintain the crew ID if possible
                     if (crewId) {
@@ -389,9 +404,18 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    function createNewChat(initialMessage) {
+    function createNewChat(initialMessage, existingChatId = null) {
         // Clear messages container
         messagesContainer.innerHTML = '';
+        
+        // Use the provided chat ID or generate a new one
+        if (existingChatId) {
+            chatId = existingChatId;
+            console.log(`Using existing chat ID: ${chatId}`);
+        } else {
+            chatId = generateChatId();
+            console.log(`Generated new chat ID: ${chatId}`);
+        }
         
         // Mark that a new chat has been created
         newChatCreated = true;
@@ -451,13 +475,17 @@ document.addEventListener('DOMContentLoaded', function() {
         addLoadingMessage();
         isProcessing = true;
         
-        // Send message to server
+        // Send message to server with chat ID and crew ID for proper thread tracking
         fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message: message }),
+            body: JSON.stringify({ 
+                message: message,
+                chat_id: chatId,
+                crew_id: currentCrewId
+            }),
         })
         .then(response => response.json())
         .then(data => {
@@ -470,8 +498,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 addMessage('assistant', data.content);
                 conversationHistory.push({ role: 'assistant', content: data.content });
                 
-                // Save to chat history
-                saveChatToHistory(chatId, getFirstUserMessage() || 'New Chat', conversationHistory);
+                // Save to chat history with a meaningful title
+                const chatTitle = getFirstUserMessage() || 
+                    (currentCrewId ? `Chat with ${crewNameElement.textContent}` : 'New Chat');
+                
+                // Save to chat history and update URL to ensure thread persistence
+                saveChatToHistory(chatId, chatTitle, conversationHistory);
+                updateUrlWithIds(currentCrewId, chatId);
                 
                 // If there was a tool call, scroll to bottom
                 if (data.has_tool_call) {

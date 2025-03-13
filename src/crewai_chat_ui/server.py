@@ -24,6 +24,9 @@ chat_handler = None
 # Dictionary to store cached chat handlers
 chat_handlers: Dict[str, ChatHandler] = {}
 
+# Dictionary to store chat threads by chat_id
+chat_threads: Dict[str, Dict[str, List]] = {}
+
 # Stores discovered crews information
 discovered_crews: List[Dict] = []
 
@@ -50,7 +53,8 @@ def chat():
     data = request.json
     user_message = data.get("message", "")
     crew_id = data.get("crew_id", None)
-    logging.debug("Received chat message")
+    chat_id = data.get("chat_id", None)
+    logging.debug(f"Received chat message for chat_id: {chat_id}, crew_id: {crew_id}")
 
     if not user_message:
         logging.warning("No message provided in request")
@@ -65,7 +69,35 @@ def chat():
         elif chat_handler is None:
             return jsonify({"status": "error", "content": "No crew has been initialized. Please select a crew first."}), 400
         
-        logging.debug("Processing message with chat_handler")
+        # Store messages in the appropriate chat thread
+        if chat_id:
+            if chat_id not in chat_threads:
+                chat_threads[chat_id] = {
+                    "crew_id": crew_id,
+                    "messages": []
+                }
+            
+            # Add user message to the thread
+            chat_threads[chat_id]["messages"].append({"role": "user", "content": user_message})
+            
+            # If we're switching threads, restore the conversation history
+            if hasattr(chat_handler, 'messages') and chat_threads[chat_id]["messages"]:
+                # Only restore if we have messages and we're not already in this thread
+                current_thread = getattr(chat_handler, 'current_chat_id', None)
+                if current_thread != chat_id:
+                    # Save the current thread first if it exists
+                    if current_thread and hasattr(chat_handler, 'messages'):
+                        chat_threads[current_thread] = {
+                            "crew_id": crew_id,
+                            "messages": chat_handler.messages
+                        }
+                    
+                    # Restore the thread we're switching to
+                    chat_handler.messages = chat_threads[chat_id]["messages"]
+                    # Mark the current thread
+                    chat_handler.current_chat_id = chat_id
+        
+        logging.debug(f"Processing message with chat_handler for chat_id: {chat_id}")
         response = chat_handler.process_message(user_message)
         
         # Ensure we have content in the response
@@ -73,8 +105,13 @@ def chat():
             logging.warning("Response content is empty despite successful status")
             response["content"] = "I'm sorry, but I couldn't generate a response. Please try again."
         
-        # Include the active crew ID in the response
+        # If we have a valid response, add it to the chat thread
+        if chat_id and response.get("status") == "success" and response.get("content"):
+            chat_threads[chat_id]["messages"].append({"role": "assistant", "content": response["content"]})
+        
+        # Include the active crew ID and chat ID in the response
         response["crew_id"] = crew_id if crew_id else chat_handler.crew_name
+        response["chat_id"] = chat_id
         
         return jsonify(response)
     except Exception as e:
@@ -89,13 +126,19 @@ def initialize():
     global chat_handler
     
     crew_id = None
+    chat_id = None
+    
     if request.method == "POST":
-        # For POST, get crew_id from JSON body
+        # For POST, get crew_id and chat_id from JSON body
         data = request.json or {}
         crew_id = data.get("crew_id")
+        chat_id = data.get("chat_id")
     else:
-        # For GET, get crew_id from query params
+        # For GET, get crew_id and chat_id from query params
         crew_id = request.args.get("crew_id")
+        chat_id = request.args.get("chat_id")
+        
+    logging.debug(f"Initializing chat with crew_id: {crew_id}, chat_id: {chat_id}")
         
     try:
         # If crew_id is provided and valid, initialize that specific crew
@@ -133,7 +176,28 @@ def initialize():
                 crew_instance, crew_name = load_crew()
                 chat_handler = ChatHandler(crew_instance, crew_name)
                 
+        # Initialize the chat handler
         initial_message = chat_handler.initialize()
+        
+        # If a chat_id is provided, associate it with this chat handler
+        if chat_id:
+            # Set the current chat ID for this handler
+            chat_handler.current_chat_id = chat_id
+            
+            # If this chat thread already exists, restore its messages
+            if chat_id in chat_threads:
+                # Only restore if the crew matches
+                if chat_threads[chat_id]["crew_id"] == crew_id:
+                    chat_handler.messages = chat_threads[chat_id]["messages"]
+                    logging.debug(f"Restored {len(chat_handler.messages)} messages for chat_id: {chat_id}")
+            else:
+                # Initialize a new chat thread
+                chat_threads[chat_id] = {
+                    "crew_id": crew_id,
+                    "messages": []
+                }
+                logging.debug(f"Created new chat thread for chat_id: {chat_id}")
+        
         return jsonify(
             {
                 "status": "success",
@@ -145,6 +209,7 @@ def initialize():
                 "crew_id": crew_id or chat_handler.crew_name,
                 "crew_name": chat_handler.crew_name,
                 "crew_description": chat_handler.crew_chat_inputs.crew_description,
+                "chat_id": chat_id  # Return the chat ID in the response
             }
         )
     except Exception as e:
