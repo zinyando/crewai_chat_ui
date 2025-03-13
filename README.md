@@ -2,6 +2,10 @@
 
 A modern web interface for interacting with CrewAI crews through an intuitive, feature-rich chat UI.
 
+![CrewAI Chat UI Screenshot](images/ui-screenshot.png)
+
+*Screenshot: CrewAI Chat UI in action*
+
 ## Features
 
 - 🌐 **Modern Web Interface**: Sleek, responsive chat UI for interacting with your CrewAI crews
@@ -12,6 +16,10 @@ A modern web interface for interacting with CrewAI crews through an intuitive, f
 - 🔄 **State Persistence**: Conversations are saved and can be resumed
 - 📱 **Responsive Design**: Optimized for various screen sizes
 - 🚀 **Easy to Use**: Simple installation and setup process
+- 🧵 **Multi-Thread Support**: Maintain multiple conversations with proper message tracking
+- 🔔 **Cross-Thread Notifications**: Get notified when responses arrive in other threads
+- 💬 **Persistent Typing Indicators**: Typing bubbles remain visible when switching threads
+- 🔄 **Synchronization**: Messages are properly synchronized between client and server
 
 ## Installation
 
@@ -96,6 +104,16 @@ The UI provides several ways to manage your conversations:
 - **View Past Conversations**: All your conversations are saved and accessible from the sidebar
 - **Delete Conversations**: Each conversation in the sidebar has a delete button (trash icon) to remove unwanted threads
 - **Clear Current Chat**: The "Clear" button in the header removes all messages in the current conversation while keeping the thread
+
+#### Thread Management
+
+The application supports sophisticated thread management:
+
+- **Multiple Concurrent Threads**: Maintain multiple conversations with different crews simultaneously
+- **Thread Persistence**: All messages are correctly stored in their respective threads
+- **Cross-Thread Notifications**: When a response arrives in a thread you're not currently viewing, you'll receive a notification
+- **Persistent Typing Indicators**: Typing bubbles remain visible when switching between threads until a response is received
+- **Thread Synchronization**: Messages are properly synchronized between client and server to ensure no messages are lost
 
 ### Development
 
