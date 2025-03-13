@@ -2,7 +2,10 @@
 
 A modern web interface for interacting with CrewAI crews through an intuitive, feature-rich chat UI.
 
-![CrewAI Chat UI Screenshot](images/ui-screenshot.png)
+![CrewAI Chat UI Screenshot light mode](https://github.com/user-attachments/assets/f08ff660-6562-40b5-b6e4-25091219b05c)
+
+![CrewAI Chat UI Screenshot dark mode](https://github.com/user-attachments/assets/c09ccfb2-1881-44e1-8eb7-02cf24dc6b78)
+
 
 *Screenshot: CrewAI Chat UI in action*
 
