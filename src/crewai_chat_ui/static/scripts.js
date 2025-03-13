@@ -36,19 +36,50 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize flag to track if a new chat has been created
     let newChatCreated = false;
     
-    // Load chat history
-    loadChatHistory();
+    // Check URL for crew and chat parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const crewIdFromUrl = urlParams.get('crew');
+    const chatIdFromUrl = urlParams.get('chat');
     
-    // Load available crews
-    loadAvailableCrews();
+    // Load chat history - if we have a chat ID in the URL, we'll load that specific chat
+    loadChatHistory(chatIdFromUrl);
+    
+    // Load available crews (passing the crew ID from URL if it exists)
+    loadAvailableCrews(crewIdFromUrl, chatIdFromUrl);
     
     // Crew selection change handler
     crewSelect.addEventListener('change', function() {
         const selectedCrewId = this.value;
         if (selectedCrewId && selectedCrewId !== currentCrewId) {
+            // Update URL with the selected crew ID
+            updateUrlWithCrewId(selectedCrewId);
             initializeChat(selectedCrewId);
         }
     });
+    
+    // Function to update URL with crew ID and chat ID
+    function updateUrlWithIds(crewId, chatIdToUse = null) {
+        // Create a new URL object with the current URL
+        const url = new URL(window.location.href);
+        
+        // Set the crew parameter to the crew ID
+        if (crewId) {
+            url.searchParams.set('crew', crewId);
+        }
+        
+        // Set the chat parameter to the chat ID if provided
+        if (chatIdToUse || chatId) {
+            url.searchParams.set('chat', chatIdToUse || chatId);
+        }
+        
+        // Update the URL without reloading the page
+        window.history.pushState({}, '', url);
+    }
+    
+    // Legacy function for backward compatibility
+    function updateUrlWithCrewId(crewId) {
+        updateUrlWithIds(crewId);
+    }
     
     // Function to load a chat by ID
     function loadChatById(id) {
@@ -60,8 +91,10 @@ document.addEventListener('DOMContentLoaded', function() {
             conversationHistory = history[id].messages || [];
             
             // Load the crew associated with this chat if available
-            if (history[id].crew_id) {
-                currentCrewId = history[id].crew_id;
+            // Check for both crew_id (old format) and crewId (new format)
+            const chatCrewId = history[id].crewId || history[id].crew_id;
+            if (chatCrewId) {
+                currentCrewId = chatCrewId;
                 crewNameElement.textContent = history[id].crew_name || 'CrewAI Chat';
                 
                 // Update the crew dropdown selection
@@ -71,6 +104,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     const option = options.find(opt => opt.value === currentCrewId);
                     if (option) {
                         crewSelect.value = currentCrewId;
+                        
+                        // Update URL with both chat and crew IDs
+                        updateUrlWithIds(currentCrewId, id);
                     }
                 }
             }
@@ -133,11 +169,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const messages = messagesContainer.querySelectorAll('.message:not(.system-message)');
         messages.forEach(msg => msg.remove());
         
-        // Add to chat history
+        // Get the currently selected crew ID
+        const selectedCrewId = crewSelect.value || currentCrewId;
+        
+        // Add to chat history (with selected crew ID)
         saveChatToHistory(chatId, 'New Chat', []);
         
-        // Re-initialize with the current crew
-        initializeChat(currentCrewId);
+        // Update URL with both the selected crew ID and new chat ID
+        if (selectedCrewId) {
+            updateUrlWithIds(selectedCrewId, chatId);
+        }
+        
+        // Re-initialize with the selected crew
+        initializeChat(selectedCrewId);
     });
     
     // Optional features (placeholders)
@@ -150,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Function to load all available crews
-    function loadAvailableCrews() {
+    function loadAvailableCrews(initialCrewId = null, initialChatId = null) {
         fetch('/api/crews')
             .then(response => response.json())
             .then(data => {
@@ -171,40 +215,84 @@ document.addEventListener('DOMContentLoaded', function() {
                         crewSelect.appendChild(option);
                     });
                     
-                    // Initialize the first crew by default if we don't have a current crew
-                    // AND if no new chat has been created yet
-                    if (!currentCrewId && !newChatCreated) {
+                                    // If we have a crew ID from URL and it exists in available crews, use it
+                    const targetCrewId = initialCrewId && data.crews.some(crew => crew.id === initialCrewId) 
+                        ? initialCrewId 
+                        : data.crews[0].id;
+                    
+                    // Set the current crew ID - this is critical for persistence
+                    currentCrewId = targetCrewId;
+                    
+                    // Set the crew select dropdown to the target crew
+                    crewSelect.value = targetCrewId;
+                    
+                    // Check if we have a specific chat ID from URL
+                    const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
+                    const history = JSON.parse(storedHistory);
+                    
+                    if (initialChatId && history[initialChatId]) {
+                        // We already loaded this chat in loadChatHistory
                         newChatCreated = true;
-                        // Clear any existing welcome message first
-                        messagesContainer.innerHTML = '';
-                        initializeChat(data.crews[0].id);
+                        
+                        // Update URL with both chat and crew IDs
+                        updateUrlWithIds(targetCrewId, initialChatId);
+                    } else {
+                        // Update URL with just the crew ID
+                        updateUrlWithIds(targetCrewId);
+                        
+                        // Initialize the target crew if no new chat has been created yet
+                        if (!newChatCreated) {
+                            newChatCreated = true;
+                            // Clear any existing welcome message first
+                            messagesContainer.innerHTML = '';
+                            initializeChat(targetCrewId);
+                        }
                     }
                 } else {
                     console.error('No crews available or error loading crews');
-                    // If there's an error or no crews, initialize without a specific crew ID
-                    // AND if no new chat has been created yet
-                    if (!currentCrewId && !newChatCreated) {
+                    // If there's an error or no crews, initialize with a default
+                    // Set a default crew ID for better persistence
+                    currentCrewId = 'default';
+                    
+                    // Update URL with crew ID and chat ID if available
+                    updateUrlWithIds(currentCrewId, initialChatId);
+                    
+                    // Initialize if no chat has been created yet
+                    if (!newChatCreated) {
                         newChatCreated = true;
                         // Clear any existing welcome message first
                         messagesContainer.innerHTML = '';
-                        initializeChat();
+                        initializeChat(currentCrewId);
                     }
                 }
             })
             .catch(error => {
                 console.error('Error loading crews:', error);
-                // If there's an error, initialize without a specific crew ID
-                // AND if no new chat has been created yet
-                if (!currentCrewId && !newChatCreated) {
+                // If there's an error, initialize with a default ID for better persistence
+                // Set a default crew ID
+                currentCrewId = 'default';
+                
+                // Update URL with crew ID and chat ID if available
+                updateUrlWithIds(currentCrewId, initialChatId);
+                
+                // Initialize if no chat has been created yet
+                if (!newChatCreated) {
                     newChatCreated = true;
                     // Clear any existing welcome message first
                     messagesContainer.innerHTML = '';
-                    initializeChat();
+                    initializeChat(currentCrewId);
                 }
             });
     }
     
     function initializeChat(crewId = null) {
+        // If a crew ID is provided, update the current crew ID
+        if (crewId) {
+            currentCrewId = crewId;
+            // Also update the URL with the crew ID
+            updateUrlWithCrewId(crewId);
+        }
+        
         addLoadingMessage();
         
         let url = '/api/initialize';
@@ -232,18 +320,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (data.status === 'success') {
                     // Update crew info
-                    currentCrewId = data.crew_id;
-                    crewNameElement.textContent = data.crew_name;
-                    crewDescriptionElement.textContent = data.crew_description;
+                    currentCrewId = data.crew_id || crewId;
+                    crewNameElement.textContent = data.crew_name || 'CrewAI Chat';
+                    crewDescriptionElement.textContent = data.crew_description || '';
                     
-                    // Update the crew dropdown selection
+                    // Always update URL with the crew ID
                     if (currentCrewId) {
-                        crewSelect.value = currentCrewId;
+                        // We'll update the URL with the chat ID after createNewChat is called
+                        // since that's when we'll have the new chat ID
+                        
+                        // Update the crew dropdown selection
+                        if (crewSelect.querySelector(`option[value="${currentCrewId}"]`)) {
+                            crewSelect.value = currentCrewId;
+                        }
                     }
                     
                     // Create a new chat with this crew
                     createNewChat(data.message);
                 } else {
+                    // Even on error, maintain the crew ID if possible
+                    if (crewId) {
+                        currentCrewId = crewId;
+                        updateUrlWithCrewId(currentCrewId);
+                        
+                        // Try to update the crew dropdown selection
+                        if (crewSelect.querySelector(`option[value="${currentCrewId}"]`)) {
+                            crewSelect.value = currentCrewId;
+                        }
+                    }
+                    
                     // Display error message
                     messagesContainer.innerHTML = '';
                     addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
@@ -252,6 +357,18 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 removeLoadingMessage();
+                
+                // Even on error, maintain the crew ID if possible
+                if (crewId) {
+                    currentCrewId = crewId;
+                    updateUrlWithCrewId(currentCrewId);
+                    
+                    // Try to update the crew dropdown selection
+                    if (crewSelect.querySelector(`option[value="${currentCrewId}"]`)) {
+                        crewSelect.value = currentCrewId;
+                    }
+                }
+                
                 messagesContainer.innerHTML = '';
                 addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
                 addMessage('assistant', 'Error initializing chat. Please check if your crew is correctly set up.');
@@ -276,12 +393,30 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update conversation history
             conversationHistory = [{ role: 'assistant', content: initialMessage }];
             
-            // Save to chat history
-            saveChatToHistory(chatId, 'New Chat', conversationHistory);
+            // Create a descriptive title based on the crew name if available
+            const chatTitle = currentCrewId ? 
+                `Chat with ${crewNameElement.textContent}` : 
+                'New Chat';
+            
+            // Save to chat history with the current crew ID
+            saveChatToHistory(chatId, chatTitle, conversationHistory);
+            
+            // Update URL with both chat and crew IDs
+            updateUrlWithIds(currentCrewId, chatId);
         } else {
             // Empty conversation history
             conversationHistory = [];
-            saveChatToHistory(chatId, 'New Chat', conversationHistory);
+            
+            // Create a descriptive title based on the crew name if available
+            const chatTitle = currentCrewId ? 
+                `Chat with ${crewNameElement.textContent}` : 
+                'New Chat';
+                
+            // Save to chat history with the current crew ID
+            saveChatToHistory(chatId, chatTitle, conversationHistory);
+            
+            // Update URL with both chat and crew IDs
+            updateUrlWithIds(currentCrewId, chatId);
         }
     }
     
@@ -425,7 +560,8 @@ document.addEventListener('DOMContentLoaded', function() {
             id: id,
             title: title,
             timestamp: new Date().toISOString(),
-            messages: messages
+            messages: messages,
+            crewId: currentCrewId  // Store the current crew ID with the chat
         };
         
         localStorage.setItem('crewai_chat_history', JSON.stringify(history));
@@ -453,8 +589,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Mark that we're about to create a new chat
                 newChatCreated = true;
                 
-                // Re-initialize
-                initializeChat();
+                // Get the currently selected crew ID
+                const selectedCrewId = crewSelect.value || currentCrewId;
+                
+                // Update URL if we have a crew ID
+                if (selectedCrewId) {
+                    updateUrlWithCrewId(selectedCrewId);
+                }
+                
+                // Re-initialize with the selected crew
+                initializeChat(selectedCrewId);
             }
             
             updateChatHistoryUI();
@@ -464,9 +608,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return false;
     }
     
-    function loadChatHistory() {
+    function loadChatHistory(specificChatId = null) {
         const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
         const history = JSON.parse(storedHistory);
+        
+        // If a specific chat ID is provided and exists in history, load it
+        if (specificChatId && history[specificChatId]) {
+            loadChatById(specificChatId);
+        }
         
         updateChatHistoryUI(history);
     }
