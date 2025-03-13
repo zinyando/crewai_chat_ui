@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // State variables
     let isProcessing = false;
-    let chatId = generateChatId();
     let conversationHistory = [];
     let currentCrewId = null;
     let availableCrews = [];
@@ -40,6 +39,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const crewIdFromUrl = urlParams.get('crew');
     const chatIdFromUrl = urlParams.get('chat');
+    
+    // Use chat ID from URL if available, otherwise generate a new one
+    let chatId = chatIdFromUrl || generateChatId();
     
     // Load chat history - if we have a chat ID in the URL, we'll load that specific chat
     loadChatHistory(chatIdFromUrl);
@@ -87,6 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const history = JSON.parse(storedHistory);
         
         if (history[id]) {
+            // Set the chat ID and load conversation history
             chatId = id;
             conversationHistory = history[id].messages || [];
             
@@ -94,24 +97,28 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check for both crew_id (old format) and crewId (new format)
             const chatCrewId = history[id].crewId || history[id].crew_id;
             if (chatCrewId) {
+                // Set the current crew ID
                 currentCrewId = chatCrewId;
-                crewNameElement.textContent = history[id].crew_name || 'CrewAI Chat';
                 
-                // Update the crew dropdown selection
+                // Update crew name and description display
+                crewNameElement.textContent = history[id].crew_name || 'CrewAI Chat';
+                crewDescriptionElement.textContent = history[id].crew_description || '';
+                
+                // Update the crew dropdown selection if the crew exists in the dropdown
                 if (currentCrewId && crewSelect) {
                     // Try to select the correct crew
                     const options = Array.from(crewSelect.options);
                     const option = options.find(opt => opt.value === currentCrewId);
                     if (option) {
                         crewSelect.value = currentCrewId;
-                        
-                        // Update URL with both chat and crew IDs
-                        updateUrlWithIds(currentCrewId, id);
                     }
                 }
             }
             
-            // Update UI to mark this chat as active
+            // Always update URL with both chat and crew IDs
+            updateUrlWithIds(currentCrewId, id);
+            
+            // Update UI to mark this chat as active in the sidebar
             document.querySelectorAll('.chat-history-item').forEach(item => {
                 item.classList.remove('active');
                 if (item.getAttribute('data-chat-id') === chatId) {
@@ -125,10 +132,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add welcome message
             addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
             
-            // Load messages
+            // Load all messages from the conversation history
             conversationHistory.forEach(msg => {
                 addMessage(msg.role, msg.content);
             });
+            
+            // Mark that a chat has been loaded to prevent double initialization
+            newChatCreated = true;
             
             return true;
         }
@@ -161,19 +171,21 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     newChatButton.addEventListener('click', function() {
-        // Create new chat session
+        // Create new chat session with a unique ID
         chatId = generateChatId();
         conversationHistory = [];
         
-        // Clear messages except welcome
-        const messages = messagesContainer.querySelectorAll('.message:not(.system-message)');
-        messages.forEach(msg => msg.remove());
+        // Clear all messages including welcome message
+        messagesContainer.innerHTML = '';
         
         // Get the currently selected crew ID
         const selectedCrewId = crewSelect.value || currentCrewId;
         
-        // Add to chat history (with selected crew ID)
-        saveChatToHistory(chatId, 'New Chat', []);
+        // Reset the newChatCreated flag to allow proper initialization
+        newChatCreated = false;
+        
+        // Add a temporary loading message
+        addLoadingMessage();
         
         // Update URL with both the selected crew ID and new chat ID
         if (selectedCrewId) {
@@ -181,6 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Re-initialize with the selected crew
+        // This will trigger a full initialization with the crew's welcome message
         initializeChat(selectedCrewId);
     });
     
@@ -561,7 +574,9 @@ document.addEventListener('DOMContentLoaded', function() {
             title: title,
             timestamp: new Date().toISOString(),
             messages: messages,
-            crewId: currentCrewId  // Store the current crew ID with the chat
+            crewId: currentCrewId,  // Store the current crew ID with the chat
+            crew_name: crewNameElement.textContent,  // Store the crew name
+            crew_description: crewDescriptionElement.textContent  // Store the crew description
         };
         
         localStorage.setItem('crewai_chat_history', JSON.stringify(history));
@@ -582,22 +597,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 chatId = generateChatId();
                 conversationHistory = [];
                 
-                // Clear messages except welcome
-                const messages = messagesContainer.querySelectorAll('.message:not(.system-message)');
-                messages.forEach(msg => msg.remove());
+                // Clear all messages including welcome
+                messagesContainer.innerHTML = '';
                 
-                // Mark that we're about to create a new chat
-                newChatCreated = true;
+                // Reset the newChatCreated flag to allow proper initialization
+                newChatCreated = false;
+                
+                // Add a temporary loading message
+                addLoadingMessage();
                 
                 // Get the currently selected crew ID
                 const selectedCrewId = crewSelect.value || currentCrewId;
                 
-                // Update URL if we have a crew ID
+                // Update URL with both the new chat ID and crew ID
                 if (selectedCrewId) {
-                    updateUrlWithCrewId(selectedCrewId);
+                    updateUrlWithIds(selectedCrewId, chatId);
                 }
                 
                 // Re-initialize with the selected crew
+                // This will trigger a full initialization with the crew's welcome message
                 initializeChat(selectedCrewId);
             }
             
@@ -680,26 +698,12 @@ document.addEventListener('DOMContentLoaded', function() {
             historyItem.appendChild(deleteBtn);
             
             historyItem.addEventListener('click', function() {
-                // Load this chat
-                chatId = chat.id;
-                conversationHistory = chat.messages;
+                // Use loadChatById which handles all the necessary updates
+                // This ensures consistent behavior when loading chats
+                loadChatById(chat.id);
                 
-                // Update UI
-                document.querySelectorAll('.chat-history-item').forEach(item => {
-                    item.classList.remove('active');
-                });
-                historyItem.classList.add('active');
-                
-                // Clear current messages
-                messagesContainer.innerHTML = '';
-                
-                // Add welcome message
-                addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
-                
-                // Load messages
-                chat.messages.forEach(msg => {
-                    addMessage(msg.role, msg.content);
-                });
+                // Mark that a chat has been loaded to prevent double initialization
+                newChatCreated = true;
             });
             
             chatHistory.appendChild(historyItem);
