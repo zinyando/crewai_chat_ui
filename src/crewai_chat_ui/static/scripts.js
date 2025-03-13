@@ -124,6 +124,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to load a chat by ID
+    // Function to highlight the active chat in the sidebar
+    function highlightActiveChat(activeChatId) {
+        document.querySelectorAll('.chat-history-item').forEach(item => {
+            item.classList.remove('active');
+            if (item.getAttribute('data-chat-id') === activeChatId) {
+                item.classList.add('active');
+                // Ensure the active chat is visible by scrolling to it if needed
+                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+    }
+    
     function loadChatById(id) {
         console.log(`Loading chat by ID: ${id}`);
         const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
@@ -164,12 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateUrlWithIds(currentCrewId, id);
             
             // Update UI to mark this chat as active in the sidebar
-            document.querySelectorAll('.chat-history-item').forEach(item => {
-                item.classList.remove('active');
-                if (item.getAttribute('data-chat-id') === chatId) {
-                    item.classList.add('active');
-                }
-            });
+            highlightActiveChat(chatId);
             
             // Clear current messages
             messagesContainer.innerHTML = '';
@@ -815,35 +822,61 @@ document.addEventListener('DOMContentLoaded', function() {
         const history = JSON.parse(storedHistory);
         
         if (history[id]) {
+            // Store the current crew ID before deleting the chat
+            const currentCrewIdBeforeDeletion = history[id].crewId || currentCrewId;
+            
+            // Delete the chat from history
             delete history[id];
             localStorage.setItem('crewai_chat_history', JSON.stringify(history));
             
-            // If we deleted the active chat, create a new one
+            // If we deleted the active chat, set the next available chat as active or create a new one
             if (id === chatId) {
-                // Create new chat session
-                chatId = generateChatId();
-                conversationHistory = [];
+                // Get all remaining chat IDs
+                const remainingChatIds = Object.keys(history);
                 
-                // Clear all messages including welcome
-                messagesContainer.innerHTML = '';
-                
-                // Reset the newChatCreated flag to allow proper initialization
-                newChatCreated = false;
-                
-                // Add a temporary loading message
-                addLoadingMessage();
-                
-                // Get the currently selected crew ID
-                const selectedCrewId = crewSelect.value || currentCrewId;
-                
-                // Update URL with both the new chat ID and crew ID
-                if (selectedCrewId) {
-                    updateUrlWithIds(selectedCrewId, chatId);
+                if (remainingChatIds.length > 0) {
+                    // Sort chats by timestamp (newest first)
+                    remainingChatIds.sort((a, b) => {
+                        const timestampA = new Date(history[a].timestamp).getTime();
+                        const timestampB = new Date(history[b].timestamp).getTime();
+                        return timestampB - timestampA; // Newest first
+                    });
+                    
+                    // Set the newest chat as active
+                    const nextChatId = remainingChatIds[0];
+                    chatId = nextChatId;
+                    
+                    // Load the chat
+                    loadChatById(nextChatId);
+                    
+                    // Update URL with the new chat ID and its crew ID
+                    const nextChatCrewId = history[nextChatId].crewId || currentCrewId;
+                    updateUrlWithIds(nextChatCrewId, nextChatId);
+                } else {
+                    // No chats left, create a new one
+                    chatId = generateChatId();
+                    conversationHistory = [];
+                    
+                    // Clear all messages
+                    messagesContainer.innerHTML = '';
+                    
+                    // Reset the newChatCreated flag to allow proper initialization
+                    newChatCreated = false;
+                    
+                    // Add a temporary loading message
+                    addLoadingMessage();
+                    
+                    // Use the crew ID from the deleted chat or the current selection
+                    const selectedCrewId = crewSelect.value || currentCrewIdBeforeDeletion;
+                    
+                    // Update URL with both the new chat ID and crew ID
+                    if (selectedCrewId) {
+                        updateUrlWithIds(selectedCrewId, chatId);
+                    }
+                    
+                    // Re-initialize with the selected crew
+                    initializeChat(selectedCrewId);
                 }
-                
-                // Re-initialize with the selected crew
-                // This will trigger a full initialization with the crew's welcome message
-                initializeChat(selectedCrewId);
             }
             
             updateChatHistoryUI();
@@ -883,6 +916,9 @@ document.addEventListener('DOMContentLoaded', function() {
             chatHistory.appendChild(emptyState);
             return;
         }
+        
+        // Store the current active chat ID before rebuilding the history
+        const currentActiveChatId = chatId;
         
         sortedHistory.forEach(chat => {
             const historyItem = document.createElement('div');
