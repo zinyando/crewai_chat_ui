@@ -10,11 +10,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const micButton = document.getElementById('mic-btn');
     const newChatButton = document.querySelector('.new-chat-btn');
     const chatHistory = document.getElementById('chat-history');
+    const crewSelect = document.getElementById('crew-select');
     
     // State variables
     let isProcessing = false;
     let chatId = generateChatId();
     let conversationHistory = [];
+    let currentCrewId = null;
+    let availableCrews = [];
     
     // Auto-resize textarea
     userInput.addEventListener('input', function() {
@@ -33,8 +36,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load chat history
     loadChatHistory();
     
-    // Always initialize the chat with the backend
-    initializeChat();
+    // Load available crews
+    loadAvailableCrews();
+    
+    // Crew selection change handler
+    crewSelect.addEventListener('change', function() {
+        const selectedCrewId = this.value;
+        if (selectedCrewId && selectedCrewId !== currentCrewId) {
+            initializeChat(selectedCrewId);
+        }
+    });
     
     // Function to load a chat by ID
     function loadChatById(id) {
@@ -44,6 +55,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (history[id]) {
             chatId = id;
             conversationHistory = history[id].messages || [];
+            
+            // Load the crew associated with this chat if available
+            if (history[id].crew_id) {
+                currentCrewId = history[id].crew_id;
+                crewNameElement.textContent = history[id].crew_name || 'CrewAI Chat';
+                
+                // Update the crew dropdown selection
+                if (currentCrewId && crewSelect) {
+                    // Try to select the correct crew
+                    const options = Array.from(crewSelect.options);
+                    const option = options.find(opt => opt.value === currentCrewId);
+                    if (option) {
+                        crewSelect.value = currentCrewId;
+                    }
+                }
+            }
             
             // Update UI to mark this chat as active
             document.querySelectorAll('.chat-history-item').forEach(item => {
@@ -106,8 +133,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add to chat history
         saveChatToHistory(chatId, 'New Chat', []);
         
-        // Re-initialize
-        initializeChat();
+        // Re-initialize with the current crew
+        initializeChat(currentCrewId);
     });
     
     // Optional features (placeholders)
@@ -119,37 +146,88 @@ document.addEventListener('DOMContentLoaded', function() {
         alert('Voice input feature coming soon!');
     });
     
-    function initializeChat() {
+    // Function to load all available crews
+    function loadAvailableCrews() {
+        fetch('/api/crews')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' && data.crews && data.crews.length > 0) {
+                    // Store the crews data
+                    availableCrews = data.crews;
+                    
+                    // Clear any existing options except the placeholder
+                    while (crewSelect.options.length > 1) {
+                        crewSelect.remove(1);
+                    }
+                    
+                    // Add each crew to the dropdown
+                    data.crews.forEach(crew => {
+                        const option = document.createElement('option');
+                        option.value = crew.id;
+                        option.textContent = crew.name;
+                        crewSelect.appendChild(option);
+                    });
+                    
+                    // Initialize the first crew by default if we don't have a current crew
+                    if (!currentCrewId) {
+                        initializeChat(data.crews[0].id);
+                    }
+                } else {
+                    console.error('No crews available or error loading crews');
+                    // If there's an error or no crews, initialize without a specific crew ID
+                    if (!currentCrewId) {
+                        initializeChat();
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading crews:', error);
+                // If there's an error, initialize without a specific crew ID
+                if (!currentCrewId) {
+                    initializeChat();
+                }
+            });
+    }
+    
+    function initializeChat(crewId = null) {
         addLoadingMessage();
         
-        fetch('/api/initialize')
+        let url = '/api/initialize';
+        let options = {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        };
+        
+        // If a specific crew ID is provided, use POST method with the crew ID
+        if (crewId) {
+            options.method = 'POST';
+            options.body = JSON.stringify({ crew_id: crewId });
+        } else if (currentCrewId) {
+            // If we already have a current crew ID but no new one is provided, use it
+            options.method = 'POST';
+            options.body = JSON.stringify({ crew_id: currentCrewId });
+        }
+        
+        fetch(url, options)
             .then(response => response.json())
             .then(data => {
                 removeLoadingMessage();
                 
                 if (data.status === 'success') {
                     // Update crew info
+                    currentCrewId = data.crew_id;
                     crewNameElement.textContent = data.crew_name;
                     crewDescriptionElement.textContent = data.crew_description;
                     
-                    // Check if we have existing chats
-                    const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
-                    const history = JSON.parse(storedHistory);
-                    
-                    if (Object.keys(history).length > 0) {
-                        // Use the most recent chat
-                        const sortedHistory = getSortedChatHistory(history);
-                        if (sortedHistory.length > 0) {
-                            // Load the most recent chat
-                            loadChatById(sortedHistory[0].id);
-                        } else {
-                            // Create a new chat if something went wrong
-                            createNewChat(data.message);
-                        }
-                    } else {
-                        // No existing chats, create a new one
-                        createNewChat(data.message);
+                    // Update the crew dropdown selection
+                    if (currentCrewId) {
+                        crewSelect.value = currentCrewId;
                     }
+                    
+                    // Create a new chat with this crew
+                    createNewChat(data.message);
                 } else {
                     // Display error message
                     messagesContainer.innerHTML = '';

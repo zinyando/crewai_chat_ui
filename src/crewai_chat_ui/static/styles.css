@@ -62,6 +62,38 @@ body {
     gap: 8px;
 }
 
+/* Crew selection styles */
+.crew-selection {
+    padding: 0 16px;
+    margin-top: 16px;
+}
+
+.crew-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: white;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.2s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
+}
+
+.crew-select:hover, .crew-select:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.crew-select option {
+    padding: 10px;
+}
+
 .new-chat-btn {
     margin: 16px;
     padding: 10px 16px;
