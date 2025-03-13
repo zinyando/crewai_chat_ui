@@ -582,6 +582,115 @@ input:checked + .slider:after {
     left: 26px;
 }
 
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal.show {
+    display: block;
+    opacity: 1;
+}
+
+.modal-content {
+    background-color: var(--sidebar-bg);
+    margin: 15% auto;
+    padding: 0;
+    border-radius: 12px;
+    width: 480px;
+    max-width: 90%;
+    box-shadow: 0 4px 20px var(--shadow-color);
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.modal.show .modal-content {
+    transform: translateY(0);
+}
+
+.modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+}
+
+.close-modal {
+    color: var(--text-secondary);
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-modal:hover {
+    color: var(--primary-color);
+}
+
+.modal-body {
+    padding: 24px;
+    color: var(--text-primary);
+}
+
+.modal-body p {
+    margin-bottom: 12px;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.modal-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cancel-btn {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.cancel-btn:hover {
+    background-color: var(--hover-color);
+}
+
+.confirm-btn {
+    background-color: var(--danger);
+    color: white;
+    border: none;
+}
+
+.confirm-btn:hover {
+    background-color: #dc2626;
+}
+
 /* Responsive styles for smaller screens */
 @media (max-width: 768px) {
     .app-container {

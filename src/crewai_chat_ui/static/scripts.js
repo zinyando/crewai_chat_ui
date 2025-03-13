@@ -12,11 +12,47 @@ document.addEventListener('DOMContentLoaded', function() {
     const crewSelect = document.getElementById('crew-select');
     const themeToggle = document.getElementById('theme-toggle-switch');
     
+    // Modal elements
+    const deleteModal = document.getElementById('delete-modal');
+    const closeModalBtn = document.querySelector('.close-modal');
+    const cancelDeleteBtn = document.getElementById('cancel-delete');
+    const confirmDeleteBtn = document.getElementById('confirm-delete');
+    
     // State variables
     let isProcessing = false;
     let conversationHistory = [];
     let currentCrewId = null;
     let availableCrews = [];
+    
+    // Modal functions
+    function showDeleteModal() {
+        deleteModal.classList.add('show');
+    }
+    
+    function hideDeleteModal() {
+        deleteModal.classList.remove('show');
+    }
+    
+    // Modal event listeners
+    closeModalBtn.addEventListener('click', hideDeleteModal);
+    cancelDeleteBtn.addEventListener('click', hideDeleteModal);
+    
+    // Clicking outside the modal content closes the modal
+    deleteModal.addEventListener('click', function(e) {
+        if (e.target === deleteModal) {
+            hideDeleteModal();
+        }
+    });
+    
+    // Confirm delete button
+    confirmDeleteBtn.addEventListener('click', function() {
+        const threadId = deleteModal.dataset.chatId;
+        console.log('Confirming deletion of chat ID:', threadId);
+        if (threadId) {
+            deleteChatFromHistory(threadId);
+            hideDeleteModal();
+        }
+    });
     
     // Track active requests for each chat thread
     // This allows us to preserve loading indicators when switching threads
@@ -774,6 +810,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function deleteChatFromHistory(id) {
+        console.log('Deleting chat with ID:', id);
         const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
         const history = JSON.parse(storedHistory);
         
@@ -875,9 +912,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add event listener for delete button with stopPropagation to prevent triggering parent click
             deleteBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
-                if (confirm('Are you sure you want to delete this conversation?')) {
-                    deleteChatFromHistory(chat.id);
-                }
+                // Store the chat ID to be deleted
+                console.log('Setting chat ID for deletion:', chat.id);
+                deleteModal.dataset.chatId = chat.id;
+                // Show the modal
+                showDeleteModal();
             });
             
             // Append elements
