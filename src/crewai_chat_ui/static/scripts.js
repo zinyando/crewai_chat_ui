@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentCrewId = null;
     let availableCrews = [];
     
+    // Track active requests for each chat thread
+    // This allows us to preserve loading indicators when switching threads
+    const activeRequests = {};
+    
     // Auto-resize textarea
     userInput.addEventListener('input', function() {
         this.style.height = 'auto';
@@ -144,6 +148,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 conversationHistory.forEach(msg => {
                     addMessage(msg.role, msg.content);
                 });
+            }
+            
+            // Check if this thread has an active request and add the loading indicator if needed
+            if (activeRequests[id]) {
+                console.log(`Thread ${id} has an active request, showing loading indicator`);
+                addLoadingMessage(id);
             }
             
             // Notify the server about the thread switch
@@ -505,8 +515,8 @@ document.addEventListener('DOMContentLoaded', function() {
         userInput.style.height = 'auto';
         sendButton.classList.remove('active');
         
-        // Add loading indicator
-        addLoadingMessage();
+        // Add loading indicator for this specific thread
+        addLoadingMessage(chatId);
         isProcessing = true;
         
         console.log(`Sending message to chat_id: ${chatId}, crew_id: ${currentCrewId}`);
@@ -529,14 +539,14 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            // Remove loading indicator
-            removeLoadingMessage();
-            isProcessing = false;
-            
             // Get the chat ID from the response to ensure we're using the correct thread
             // This is critical to ensure replies go to the thread that initiated the message
             const responseChatId = data.chat_id || originalChatId;
             console.log(`Response received for chat_id: ${responseChatId}`);
+            
+            // Remove loading indicator for the specific thread that received the response
+            removeLoadingMessage(responseChatId);
+            isProcessing = false;
             
             if (data.status === 'success') {
                 // If the current UI is showing a different chat than the one that received the response,
@@ -622,7 +632,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
-            removeLoadingMessage();
+            // Remove loading indicator for the specific thread that initiated the request
+            removeLoadingMessage(originalChatId);
             isProcessing = false;
             const errorMessage = 'An error occurred while processing your message.';
             addMessage('assistant', errorMessage);
@@ -661,28 +672,47 @@ document.addEventListener('DOMContentLoaded', function() {
         scrollToBottom();
     }
     
-    function addLoadingMessage() {
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'loading-indicator';
-        loadingDiv.id = 'loading-indicator';
+    function addLoadingMessage(threadId = null) {
+        // If no threadId is provided, use the current chatId
+        const targetThreadId = threadId || chatId;
         
-        // Create typing animation dots
-        const typingAnimation = document.createElement('div');
-        typingAnimation.className = 'typing-animation';
+        // Mark this thread as having an active request
+        activeRequests[targetThreadId] = true;
+        console.log(`Added loading indicator for thread: ${targetThreadId}`);
         
-        for (let i = 0; i < 3; i++) {
-            const dot = document.createElement('div');
-            dot.className = 'typing-dot';
-            typingAnimation.appendChild(dot);
+        // Only add the visual indicator if we're in the thread that's loading
+        if (targetThreadId === chatId) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'loading-indicator';
+            loadingDiv.id = `loading-indicator-${targetThreadId}`;
+            loadingDiv.setAttribute('data-thread-id', targetThreadId);
+            
+            // Create typing animation dots
+            const typingAnimation = document.createElement('div');
+            typingAnimation.className = 'typing-animation';
+            
+            for (let i = 0; i < 3; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'typing-dot';
+                typingAnimation.appendChild(dot);
+            }
+            
+            loadingDiv.appendChild(typingAnimation);
+            messagesContainer.appendChild(loadingDiv);
+            scrollToBottom();
         }
-        
-        loadingDiv.appendChild(typingAnimation);
-        messagesContainer.appendChild(loadingDiv);
-        scrollToBottom();
     }
     
-    function removeLoadingMessage() {
-        const loadingDiv = document.getElementById('loading-indicator');
+    function removeLoadingMessage(threadId = null) {
+        // If no threadId is provided, use the current chatId
+        const targetThreadId = threadId || chatId;
+        
+        // Remove this thread from active requests
+        delete activeRequests[targetThreadId];
+        console.log(`Removed loading indicator for thread: ${targetThreadId}`);
+        
+        // Remove the visual indicator if we're in the thread that was loading
+        const loadingDiv = document.getElementById(`loading-indicator-${targetThreadId}`);
         if (loadingDiv) {
             loadingDiv.remove();
         }
