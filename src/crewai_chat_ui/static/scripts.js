@@ -511,6 +511,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log(`Sending message to chat_id: ${chatId}, crew_id: ${currentCrewId}`);
         
+        // Store the original chat ID that initiated this message
+        const originalChatId = chatId;
+        console.log(`Original chat ID for this message: ${originalChatId}`);
+        
         // Send message to server with chat ID and crew ID for proper thread tracking
         fetch('/api/chat', {
             method: 'POST',
@@ -519,7 +523,7 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify({ 
                 message: message,
-                chat_id: chatId,
+                chat_id: originalChatId,  // Always use the original chat ID
                 crew_id: currentCrewId
             }),
         })
@@ -529,28 +533,92 @@ document.addEventListener('DOMContentLoaded', function() {
             removeLoadingMessage();
             isProcessing = false;
             
+            // Get the chat ID from the response to ensure we're using the correct thread
+            // This is critical to ensure replies go to the thread that initiated the message
+            const responseChatId = data.chat_id || originalChatId;
+            console.log(`Response received for chat_id: ${responseChatId}`);
+            
             if (data.status === 'success') {
-                // Add assistant response
-                addMessage('assistant', data.content);
-                conversationHistory.push({ role: 'assistant', content: data.content });
-                
-                // Save to chat history with a meaningful title
-                const chatTitle = getFirstUserMessage() || 
-                    (currentCrewId ? `Chat with ${crewNameElement.textContent}` : 'New Chat');
-                
-                // Save to chat history and update URL to ensure thread persistence
-                saveChatToHistory(chatId, chatTitle, conversationHistory);
-                updateUrlWithIds(currentCrewId, chatId);
-                
-                // If there was a tool call, scroll to bottom
-                if (data.has_tool_call) {
-                    scrollToBottom();
+                // If the current UI is showing a different chat than the one that received the response,
+                // we need to handle this specially
+                if (chatId !== responseChatId) {
+                    console.log(`Response is for a different chat (${responseChatId}) than currently displayed (${chatId})`);
+                    
+                    // Get the chat history for the response thread
+                    const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
+                    const history = JSON.parse(storedHistory);
+                    
+                    if (history[responseChatId]) {
+                        // Update the messages in the response thread's history
+                        const threadMessages = history[responseChatId].messages || [];
+                        threadMessages.push({ role: 'assistant', content: data.content });
+                        
+                        // Save the updated history for the response thread
+                        const threadTitle = history[responseChatId].title || 'Chat';
+                        saveChatToHistory(responseChatId, threadTitle, threadMessages);
+                        console.log(`Saved response to thread ${responseChatId} which is not currently displayed`);
+                        
+                        // Notify the user that a response was received in another thread
+                        const notification = document.createElement('div');
+                        notification.className = 'notification';
+                        notification.textContent = `New response received in another chat thread`;
+                        notification.style.position = 'fixed';
+                        notification.style.bottom = '20px';
+                        notification.style.right = '20px';
+                        notification.style.backgroundColor = '#4CAF50';
+                        notification.style.color = 'white';
+                        notification.style.padding = '10px';
+                        notification.style.borderRadius = '5px';
+                        notification.style.zIndex = '1000';
+                        notification.style.cursor = 'pointer';
+                        notification.onclick = () => {
+                            loadChatById(responseChatId);
+                            notification.remove();
+                        };
+                        document.body.appendChild(notification);
+                        setTimeout(() => notification.remove(), 5000);
+                    }
+                } else {
+                    // Normal case: response is for the current chat
+                    // Add assistant response to the current UI
+                    addMessage('assistant', data.content);
+                    conversationHistory.push({ role: 'assistant', content: data.content });
+                    
+                    // Save to chat history with a meaningful title
+                    const chatTitle = getFirstUserMessage() || 
+                        (currentCrewId ? `Chat with ${crewNameElement.textContent}` : 'New Chat');
+                    
+                    // Save to chat history and update URL to ensure thread persistence
+                    saveChatToHistory(chatId, chatTitle, conversationHistory);
+                    updateUrlWithIds(currentCrewId, chatId);
+                    
+                    // If there was a tool call, scroll to bottom
+                    if (data.has_tool_call) {
+                        scrollToBottom();
+                    }
                 }
             } else {
-                addMessage('assistant', 'Error: ' + data.content);
-                // Still save the error message to the conversation history
-                conversationHistory.push({ role: 'assistant', content: 'Error: ' + data.content });
-                saveChatToHistory(chatId, chatTitle, conversationHistory);
+                // Handle error case
+                if (chatId !== responseChatId) {
+                    // Error for a different thread
+                    console.log(`Error response is for a different chat (${responseChatId}) than currently displayed (${chatId})`);
+                    // Just update the thread history without showing in UI
+                    const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
+                    const history = JSON.parse(storedHistory);
+                    
+                    if (history[responseChatId]) {
+                        const threadMessages = history[responseChatId].messages || [];
+                        threadMessages.push({ role: 'assistant', content: 'Error: ' + data.content });
+                        const threadTitle = history[responseChatId].title || 'Chat';
+                        saveChatToHistory(responseChatId, threadTitle, threadMessages);
+                    }
+                } else {
+                    // Error for current thread
+                    addMessage('assistant', 'Error: ' + data.content);
+                    // Still save the error message to the conversation history
+                    conversationHistory.push({ role: 'assistant', content: 'Error: ' + data.content });
+                    saveChatToHistory(chatId, chatTitle, conversationHistory);
+                }
             }
         })
         .catch(error => {

@@ -126,9 +126,11 @@ def chat():
                 
             logging.debug(f"Added assistant response to chat_id: {chat_id}, message count: {len(chat_threads[chat_id]['messages'])}")
         
-        # Include the active crew ID and chat ID in the response
-        response["crew_id"] = crew_id if crew_id else chat_handler.crew_name
+        # Always include the chat_id in the response to ensure proper thread tracking
+        # This is critical for the client to know which thread the response belongs to
         response["chat_id"] = chat_id
+        response["crew_id"] = crew_id if crew_id else getattr(chat_handler, 'crew_name', 'default')
+        logging.debug(f"Sending response for chat_id: {chat_id}, crew_id: {response['crew_id']}")
         
         return jsonify(response)
     except Exception as e:
