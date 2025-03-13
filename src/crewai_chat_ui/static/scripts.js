@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const newChatButton = document.querySelector('.new-chat-btn');
     const chatHistory = document.getElementById('chat-history');
     const crewSelect = document.getElementById('crew-select');
+    const themeToggle = document.getElementById('theme-toggle-switch');
     
     // State variables
     let isProcessing = false;
@@ -236,6 +237,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Optional features removed as they are not functional
+    
+    // Dark mode toggle functionality
+    themeToggle.addEventListener('change', function() {
+        if (this.checked) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+            localStorage.setItem('theme', 'light');
+        }
+    });
+    
+    // Check for saved theme preference
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        themeToggle.checked = true;
+    }
     
     // Function to load all available crews
     function loadAvailableCrews(initialCrewId = null, initialChatId = null) {
