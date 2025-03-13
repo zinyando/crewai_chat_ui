@@ -6,8 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const crewNameElement = document.getElementById('crew-name');
     const crewDescriptionElement = document.getElementById('crew-description');
     const clearButton = document.getElementById('clear-btn');
-    const uploadButton = document.getElementById('upload-btn');
-    const micButton = document.getElementById('mic-btn');
+    // Upload and mic buttons removed as they are not functional
     const newChatButton = document.querySelector('.new-chat-btn');
     const chatHistory = document.getElementById('chat-history');
     const crewSelect = document.getElementById('crew-select');
@@ -236,14 +235,7 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeChat(selectedCrewId);
     });
     
-    // Optional features (placeholders)
-    uploadButton.addEventListener('click', function() {
-        alert('File upload feature coming soon!');
-    });
-    
-    micButton.addEventListener('click', function() {
-        alert('Voice input feature coming soon!');
-    });
+    // Optional features removed as they are not functional
     
     // Function to load all available crews
     function loadAvailableCrews(initialCrewId = null, initialChatId = null) {
