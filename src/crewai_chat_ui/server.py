@@ -61,6 +61,10 @@ def chat():
         return jsonify({"error": "No message provided"}), 400
 
     try:
+        # If no chat_id is provided, we can't properly track the thread
+        if not chat_id:
+            return jsonify({"status": "error", "content": "No chat ID provided. Unable to track conversation thread."}), 400
+            
         # If a specific crew_id is provided, use that chat handler
         if crew_id and crew_id in chat_handlers:
             handler = chat_handlers[crew_id]
@@ -69,33 +73,37 @@ def chat():
         elif chat_handler is None:
             return jsonify({"status": "error", "content": "No crew has been initialized. Please select a crew first."}), 400
         
-        # Store messages in the appropriate chat thread
-        if chat_id:
-            if chat_id not in chat_threads:
-                chat_threads[chat_id] = {
-                    "crew_id": crew_id,
-                    "messages": []
+        # Always store messages in the appropriate chat thread
+        # Initialize the thread if it doesn't exist
+        if chat_id not in chat_threads:
+            chat_threads[chat_id] = {
+                "crew_id": crew_id,
+                "messages": []
+            }
+            logging.debug(f"Created new chat thread for chat_id: {chat_id}")
+        
+        # Add user message to the thread
+        chat_threads[chat_id]["messages"].append({"role": "user", "content": user_message})
+        logging.debug(f"Added user message to chat_id: {chat_id}, message count: {len(chat_threads[chat_id]['messages'])}")
+        
+        # Always restore the conversation history for this thread
+        if hasattr(chat_handler, 'messages'):
+            # Save the current thread first if it exists and is different
+            current_thread = getattr(chat_handler, 'current_chat_id', None)
+            if current_thread and current_thread != chat_id and hasattr(chat_handler, 'messages'):
+                # Create a deep copy of the messages to avoid reference issues
+                chat_threads[current_thread] = {
+                    "crew_id": crew_id if crew_id else getattr(chat_handler, 'crew_name', 'default'),
+                    "messages": chat_handler.messages.copy() if isinstance(chat_handler.messages, list) else []
                 }
+                logging.debug(f"Saved {len(chat_handler.messages)} messages from previous thread: {current_thread}")
             
-            # Add user message to the thread
-            chat_threads[chat_id]["messages"].append({"role": "user", "content": user_message})
-            
-            # If we're switching threads, restore the conversation history
-            if hasattr(chat_handler, 'messages') and chat_threads[chat_id]["messages"]:
-                # Only restore if we have messages and we're not already in this thread
-                current_thread = getattr(chat_handler, 'current_chat_id', None)
-                if current_thread != chat_id:
-                    # Save the current thread first if it exists
-                    if current_thread and hasattr(chat_handler, 'messages'):
-                        chat_threads[current_thread] = {
-                            "crew_id": crew_id,
-                            "messages": chat_handler.messages
-                        }
-                    
-                    # Restore the thread we're switching to
-                    chat_handler.messages = chat_threads[chat_id]["messages"]
-                    # Mark the current thread
-                    chat_handler.current_chat_id = chat_id
+            # Restore the thread we're working with - create a deep copy to avoid reference issues
+            if chat_id in chat_threads:
+                chat_handler.messages = chat_threads[chat_id]["messages"].copy() if isinstance(chat_threads[chat_id]["messages"], list) else []
+                # Mark the current thread
+                chat_handler.current_chat_id = chat_id
+                logging.debug(f"Restored {len(chat_handler.messages)} messages for chat_id: {chat_id}")
         
         logging.debug(f"Processing message with chat_handler for chat_id: {chat_id}")
         response = chat_handler.process_message(user_message)
@@ -105,9 +113,18 @@ def chat():
             logging.warning("Response content is empty despite successful status")
             response["content"] = "I'm sorry, but I couldn't generate a response. Please try again."
         
-        # If we have a valid response, add it to the chat thread
-        if chat_id and response.get("status") == "success" and response.get("content"):
+        # Always add the response to the chat thread if it's valid
+        if response.get("status") == "success" and response.get("content"):
+            # Add the assistant response to the chat thread
             chat_threads[chat_id]["messages"].append({"role": "assistant", "content": response["content"]})
+            
+            # Ensure chat_handler.messages is synchronized with chat_threads
+            # This is critical to ensure messages are preserved correctly
+            if hasattr(chat_handler, 'messages'):
+                # Synchronize the chat handler's messages with the thread
+                chat_handler.messages = chat_threads[chat_id]["messages"].copy()
+                
+            logging.debug(f"Added assistant response to chat_id: {chat_id}, message count: {len(chat_threads[chat_id]['messages'])}")
         
         # Include the active crew ID and chat ID in the response
         response["crew_id"] = crew_id if crew_id else chat_handler.crew_name
@@ -188,14 +205,24 @@ def initialize():
             if chat_id in chat_threads:
                 # Only restore if the crew matches
                 if chat_threads[chat_id]["crew_id"] == crew_id:
-                    chat_handler.messages = chat_threads[chat_id]["messages"]
+                    # Create a deep copy of the messages to avoid reference issues
+                    chat_handler.messages = chat_threads[chat_id]["messages"].copy() if isinstance(chat_threads[chat_id]["messages"], list) else []
                     logging.debug(f"Restored {len(chat_handler.messages)} messages for chat_id: {chat_id}")
+                else:
+                    # If crew doesn't match, create a new thread with the same ID but different crew
+                    chat_threads[chat_id] = {
+                        "crew_id": crew_id,
+                        "messages": []
+                    }
+                    chat_handler.messages = []
+                    logging.debug(f"Created new chat thread for chat_id: {chat_id} with different crew")
             else:
                 # Initialize a new chat thread
                 chat_threads[chat_id] = {
                     "crew_id": crew_id,
                     "messages": []
                 }
+                chat_handler.messages = []
                 logging.debug(f"Created new chat thread for chat_id: {chat_id}")
         
         return jsonify(

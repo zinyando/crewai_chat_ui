@@ -85,13 +85,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to load a chat by ID
     function loadChatById(id) {
+        console.log(`Loading chat by ID: ${id}`);
         const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
         const history = JSON.parse(storedHistory);
         
         if (history[id]) {
             // Set the chat ID and load conversation history
             chatId = id;
-            conversationHistory = history[id].messages || [];
+            // Create a deep copy of the messages to avoid reference issues
+            conversationHistory = JSON.parse(JSON.stringify(history[id].messages || []));
+            console.log(`Loaded ${conversationHistory.length} messages from chat history`);
             
             // Load the crew associated with this chat if available
             // Check for both crew_id (old format) and crewId (new format)
@@ -99,6 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (chatCrewId) {
                 // Set the current crew ID
                 currentCrewId = chatCrewId;
+                console.log(`Set current crew ID to: ${currentCrewId}`);
                 
                 // Update crew name and description display
                 crewNameElement.textContent = history[id].crew_name || 'CrewAI Chat';
@@ -111,11 +115,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const option = options.find(opt => opt.value === currentCrewId);
                     if (option) {
                         crewSelect.value = currentCrewId;
+                        console.log(`Updated crew dropdown to: ${currentCrewId}`);
                     }
                 }
             }
             
-            // Always update URL with both chat and crew IDs
+            // Always update URL with both chat and crew IDs to ensure thread persistence
             updateUrlWithIds(currentCrewId, id);
             
             // Update UI to mark this chat as active in the sidebar
@@ -133,8 +138,32 @@ document.addEventListener('DOMContentLoaded', function() {
             addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
             
             // Load all messages from the conversation history
-            conversationHistory.forEach(msg => {
-                addMessage(msg.role, msg.content);
+            // This ensures all messages are displayed in the correct thread
+            if (conversationHistory.length > 0) {
+                console.log(`Displaying ${conversationHistory.length} messages in chat thread`);
+                conversationHistory.forEach(msg => {
+                    addMessage(msg.role, msg.content);
+                });
+            }
+            
+            // Notify the server about the thread switch
+            // This ensures the server knows which thread we're working with
+            fetch('/api/initialize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    crew_id: currentCrewId,
+                    chat_id: id
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(`Notified server about thread switch to chat_id: ${id}`);
+            })
+            .catch(error => {
+                console.error('Error notifying server about thread switch:', error);
             });
             
             // Mark that a chat has been loaded to prevent double initialization
@@ -466,6 +495,11 @@ document.addEventListener('DOMContentLoaded', function() {
         addMessage('user', message);
         conversationHistory.push({ role: 'user', content: message });
         
+        // Immediately save to chat history to ensure message is preserved
+        const chatTitle = getFirstUserMessage() || 
+            (currentCrewId ? `Chat with ${crewNameElement.textContent}` : 'New Chat');
+        saveChatToHistory(chatId, chatTitle, conversationHistory);
+        
         // Clear input field and reset height
         userInput.value = '';
         userInput.style.height = 'auto';
@@ -474,6 +508,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add loading indicator
         addLoadingMessage();
         isProcessing = true;
+        
+        console.log(`Sending message to chat_id: ${chatId}, crew_id: ${currentCrewId}`);
         
         // Send message to server with chat ID and crew ID for proper thread tracking
         fetch('/api/chat', {
@@ -512,12 +548,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else {
                 addMessage('assistant', 'Error: ' + data.content);
+                // Still save the error message to the conversation history
+                conversationHistory.push({ role: 'assistant', content: 'Error: ' + data.content });
+                saveChatToHistory(chatId, chatTitle, conversationHistory);
             }
         })
         .catch(error => {
             removeLoadingMessage();
             isProcessing = false;
-            addMessage('assistant', 'An error occurred while processing your message.');
+            const errorMessage = 'An error occurred while processing your message.';
+            addMessage('assistant', errorMessage);
+            // Still save the error message to the conversation history
+            conversationHistory.push({ role: 'assistant', content: errorMessage });
+            saveChatToHistory(chatId, chatTitle, conversationHistory);
             console.error('Error:', error);
         });
     }
@@ -602,11 +645,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const storedHistory = localStorage.getItem('crewai_chat_history') || '{}';
         const history = JSON.parse(storedHistory);
         
+        // Create a deep copy of messages to avoid reference issues
+        const messagesCopy = JSON.parse(JSON.stringify(messages));
+        
+        console.log(`Saving ${messagesCopy.length} messages to chat history for ID: ${id}`);
+        
         history[id] = {
             id: id,
             title: title,
             timestamp: new Date().toISOString(),
-            messages: messages,
+            messages: messagesCopy,
             crewId: currentCrewId,  // Store the current crew ID with the chat
             crew_name: crewNameElement.textContent,  // Store the crew name
             crew_description: crewDescriptionElement.textContent  // Store the crew description
