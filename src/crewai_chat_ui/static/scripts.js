@@ -33,6 +33,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Initialize flag to track if a new chat has been created
+    let newChatCreated = false;
+    
     // Load chat history
     loadChatHistory();
     
@@ -169,13 +172,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     
                     // Initialize the first crew by default if we don't have a current crew
-                    if (!currentCrewId) {
+                    // AND if no new chat has been created yet
+                    if (!currentCrewId && !newChatCreated) {
+                        newChatCreated = true;
+                        // Clear any existing welcome message first
+                        messagesContainer.innerHTML = '';
                         initializeChat(data.crews[0].id);
                     }
                 } else {
                     console.error('No crews available or error loading crews');
                     // If there's an error or no crews, initialize without a specific crew ID
-                    if (!currentCrewId) {
+                    // AND if no new chat has been created yet
+                    if (!currentCrewId && !newChatCreated) {
+                        newChatCreated = true;
+                        // Clear any existing welcome message first
+                        messagesContainer.innerHTML = '';
                         initializeChat();
                     }
                 }
@@ -183,7 +194,11 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 console.error('Error loading crews:', error);
                 // If there's an error, initialize without a specific crew ID
-                if (!currentCrewId) {
+                // AND if no new chat has been created yet
+                if (!currentCrewId && !newChatCreated) {
+                    newChatCreated = true;
+                    // Clear any existing welcome message first
+                    messagesContainer.innerHTML = '';
                     initializeChat();
                 }
             });
@@ -247,6 +262,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function createNewChat(initialMessage) {
         // Clear messages container
         messagesContainer.innerHTML = '';
+        
+        // Mark that a new chat has been created
+        newChatCreated = true;
         
         // Add welcome message
         addMessage('system', 'Welcome to CrewAI Chat! How can I assist you today?');
@@ -431,6 +449,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Clear messages except welcome
                 const messages = messagesContainer.querySelectorAll('.message:not(.system-message)');
                 messages.forEach(msg => msg.remove());
+                
+                // Mark that we're about to create a new chat
+                newChatCreated = true;
                 
                 // Re-initialize
                 initializeChat();
