@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crewai-chat-ui"
-version = "0.1.1"
+version = "0.1.2"
 authors = [{ name = "Lennex Zinyando", email = "brizdigital@gmail.com" }]
 description = "Web UI for CrewAI chat functionality"
 readme = "README.md"
@@ -15,8 +15,8 @@ dependencies = ["crewai>=0.105.0", "flask>=2.0.0", "click>=8.0.0"]
 crewai-chat-ui = "crewai_chat_ui.server:main"
 
 [project.urls]
-"Homepage" = "https://github.com/zinyando/crewai-chat-ui"
-"Bug Tracker" = "https://github.com/zinyando/crewai-chat-ui/issues"
+"Github" = "https://github.com/zinyando/crewai_chat_ui"
+"Bug Tracker" = "https://github.com/zinyando/crewai_chat_ui/issues"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
