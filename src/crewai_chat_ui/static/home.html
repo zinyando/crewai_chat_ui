@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrewAI Dashboard</title>
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .dashboard-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        .dashboard-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .dashboard-header p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+        }
+        
+        .feature-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .feature-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 300px;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+        }
+        
+        .feature-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-card p {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+        }
+        
+        .feature-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .feature-btn:hover {
+            background-color: var(--primary-color-dark);
+        }
+        
+        .coming-soon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: var(--accent-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .feature-card-container {
+            position: relative;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1><i class="fa-solid fa-robot"></i> CrewAI Dashboard</h1>
+            <p>Explore and interact with your AI crews and flows</p>
+        </div>
+        
+        <div class="feature-cards">
+            <div class="feature-card-container">
+                <div class="feature-card">
+                    <div>
+                        <div class="feature-icon">
+                            <i class="fa-solid fa-comments"></i>
+                        </div>
+                        <h2>Crew Chat</h2>
+                        <p>Interact with your AI crews through a modern chat interface. Ask questions, give instructions, and collaborate with your AI team.</p>
+                    </div>
+                    <a href="/chat" class="feature-btn">Open Chat</a>
+                </div>
+            </div>
+            
+            <div class="feature-card-container">
+                <div class="coming-soon">Coming Soon</div>
+                <div class="feature-card">
+                    <div>
+                        <div class="feature-icon">
+                            <i class="fa-solid fa-diagram-project"></i>
+                        </div>
+                        <h2>Flow Visualization</h2>
+                        <p>Visualize your AI workflows with interactive diagrams. See how agents collaborate and track the execution of tasks in real-time.</p>
+                    </div>
+                    <a href="/flows" class="feature-btn">View Flows</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

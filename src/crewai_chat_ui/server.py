@@ -43,9 +43,26 @@ discovered_crews: List[Dict] = []
 
 @app.route("/")
 def index():
+    """Serve the home page."""
+    static_dir = Path(__file__).parent / "static"
+    return send_from_directory(static_dir, "home.html")
+
+
+@app.route("/chat")
+def chat_interface():
     """Serve the main chat interface."""
     static_dir = Path(__file__).parent / "static"
     return send_from_directory(static_dir, "index.html")
+
+
+@app.route("/flows")
+def flows_interface():
+    """Placeholder for the flows visualization interface."""
+    # This is a placeholder that will be implemented in the future
+    return jsonify({
+        "status": "coming_soon",
+        "message": "The flows visualization feature is coming soon!"
+    })
 
 
 @app.route("/static/<path:path>")
