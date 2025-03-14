@@ -31,7 +31,6 @@ from crewai_chat_ui.flow_handler import FlowHandler
 # Create Flask app
 app = Flask(__name__)
 chat_handler = None
-flow_handler = FlowHandler()
 
 # Dictionary to store cached chat handlers
 chat_handlers: Dict[str, ChatHandler] = {}
@@ -68,6 +67,12 @@ def flows_interface():
 def get_flows():
     """Get all available flows."""
     try:
+        # Check if flow_handler is initialized
+        if "flow_handler" not in globals():
+            # Initialize flow handler if not already done
+            global flow_handler
+            flow_handler = FlowHandler()
+
         flows = flow_handler.get_flows()
         return jsonify({"status": "success", "flows": flows})
     except Exception as e:
@@ -78,6 +83,12 @@ def get_flows():
 def get_flow(flow_id):
     """Get a specific flow by ID."""
     try:
+        # Check if flow_handler is initialized
+        if "flow_handler" not in globals():
+            # Initialize flow handler if not already done
+            global flow_handler
+            flow_handler = FlowHandler()
+
         flow = flow_handler.get_flow(flow_id)
         return jsonify({"status": "success", "flow": flow})
     except ValueError as e:
@@ -411,6 +422,9 @@ def main():
                     click.echo(f"Initialized {crew_name} as the default crew")
                 except Exception as e:
                     click.echo(f"Error initializing first crew: {str(e)}", err=True)
+                    click.echo(
+                        "Continuing without initializing a crew. Flow visualization will still be available."
+                    )
             else:
                 click.echo("No crews found. Trying fallback method...")
                 try:
@@ -445,19 +459,57 @@ def main():
                     click.echo(
                         "4. Run your crew file directly with 'python crew.py' to test it"
                     )
-                    sys.exit(1)
+                    click.echo(
+                        "\nContinuing without initializing a crew. Flow visualization will still be available."
+                    )
         except Exception as e:
             stop_loading.set()
             loading_thread.join()
             click.echo(f"Error discovering crews: {str(e)}", err=True)
-            sys.exit(1)
+            click.echo(
+                "Continuing without crew discovery. Flow visualization will still be available."
+            )
+            discovered_crews = []
+
+        # Now initialize flow handler with proper loading indicator
+        click.echo("Discovering flows in current directory...")
+
+        # Show loading indicator for flow loading
+        flow_stop_loading = threading.Event()
+        flow_loading_thread = threading.Thread(
+            target=show_loading, args=(flow_stop_loading, "Searching for flow files")
+        )
+        flow_loading_thread.start()
+
+        try:
+            # Initialize flow handler
+            flow_handler = FlowHandler()
+
+            # Stop the loading indicator
+            flow_stop_loading.set()
+            flow_loading_thread.join()
+
+            # Get available flows
+            available_flows = flow_handler.get_flows()
+            if available_flows:
+                click.echo(f"Found {len(available_flows)} flows")
+            else:
+                click.echo("No flows found.")
+
+        except Exception as e:
+            # Stop the loading indicator
+            flow_stop_loading.set()
+            flow_loading_thread.join()
+            click.echo(f"Error discovering flows: {str(e)}", err=True)
 
         # Start the Flask server
         host = "0.0.0.0"  # Listen on all interfaces
         port = 4200
 
-        click.echo(click.style(f"Server running! Access the chat UI at: ", fg="green") + 
-                 click.style(f"http://localhost:{port}", fg="bright_green", bold=True))
+        click.echo(
+            click.style(f"Server running! Access the chat UI at: ", fg="green")
+            + click.style(f"http://localhost:{port}", fg="bright_green", bold=True)
+        )
         click.echo(click.style("Press Ctrl+C to stop the server", fg="yellow"))
 
         # Create a custom log handler to filter out non-localhost URLs
@@ -469,7 +521,6 @@ def main():
 
         # Run the Flask app with minimal logging
         app.run(host=host, port=port, debug=False, use_reloader=False)
-
 
     except KeyboardInterrupt:
         click.echo("\nServer stopped")
