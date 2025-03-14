@@ -25,11 +25,13 @@ from crewai_chat_ui.crew_loader import (
     discover_available_crews,
 )
 from crewai_chat_ui.chat_handler import ChatHandler
+from crewai_chat_ui.flow_handler import FlowHandler
 
 
 # Create Flask app
 app = Flask(__name__)
 chat_handler = None
+flow_handler = FlowHandler()
 
 # Dictionary to store cached chat handlers
 chat_handlers: Dict[str, ChatHandler] = {}
@@ -57,12 +59,31 @@ def chat_interface():
 
 @app.route("/flows")
 def flows_interface():
-    """Placeholder for the flows visualization interface."""
-    # This is a placeholder that will be implemented in the future
-    return jsonify({
-        "status": "coming_soon",
-        "message": "The flows visualization feature is coming soon!"
-    })
+    """Serve the flows visualization interface."""
+    static_dir = Path(__file__).parent / "static"
+    return send_from_directory(static_dir, "flows.html")
+
+
+@app.route("/api/flows")
+def get_flows():
+    """Get all available flows."""
+    try:
+        flows = flow_handler.get_flows()
+        return jsonify({"status": "success", "flows": flows})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/flows/<flow_id>")
+def get_flow(flow_id):
+    """Get a specific flow by ID."""
+    try:
+        flow = flow_handler.get_flow(flow_id)
+        return jsonify({"status": "success", "flow": flow})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/static/<path:path>")

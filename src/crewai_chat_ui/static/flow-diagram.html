@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Diagram</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: #f9fafb;
+        }
+        
+        #flow-diagram {
+            width: 100%;
+            height: 100vh;
+        }
+        
+        .node {
+            cursor: pointer;
+        }
+        
+        .node rect {
+            fill: #fff;
+            stroke: #3b82f6;
+            stroke-width: 2px;
+            /* rx and ry will be set in JavaScript */
+        }
+        
+        .node.agent rect {
+            stroke: #10b981;
+        }
+        
+        .node.start rect {
+            stroke: #f59e0b;
+        }
+        
+        .node.end rect {
+            stroke: #ef4444;
+        }
+        
+        .node text {
+            font-size: 12px;
+            /* text-anchor and dy will be set in JavaScript */
+            pointer-events: none;
+        }
+        
+        .node .title {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .node .subtitle {
+            fill: #4b5563;
+            font-size: 11px;
+        }
+        
+        .node .status {
+            font-size: 10px;
+        }
+        
+        .node .status.completed {
+            fill: #10b981;
+        }
+        
+        .node .status.in-progress {
+            fill: #f59e0b;
+        }
+        
+        .node .status.pending {
+            fill: #6b7280;
+        }
+        
+        .link {
+            fill: none;
+            stroke: #9ca3af;
+            stroke-width: 2px;
+            marker-end: url(#arrowhead);
+        }
+        
+        .link.active {
+            stroke: #3b82f6;
+            stroke-width: 3px;
+        }
+        
+        .node-icon {
+            font-family: 'Font Awesome 5 Free';
+            font-weight: 900;
+            font-size: 16px;
+            /* text-anchor and dy will be set in JavaScript */
+        }
+        
+        .tooltip {
+            position: absolute;
+            background-color: white;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
+        }
+        
+        .tooltip h3 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+        }
+        
+        .tooltip p {
+            margin: 5px 0;
+            color: #4b5563;
+        }
+        
+        /* Dark mode styles */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #111827;
+            }
+            
+            .node rect {
+                fill: #1f2937;
+            }
+            
+            .node text {
+                fill: #f9fafb;
+            }
+            
+            .node .subtitle {
+                fill: #d1d5db;
+            }
+            
+            .tooltip {
+                background-color: #1f2937;
+                border-color: #374151;
+                color: #f9fafb;
+            }
+            
+            .tooltip p {
+                color: #d1d5db;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="flow-diagram"></div>
+    <div class="tooltip" id="tooltip"></div>
+    
+    <script>
+        // Sample flow data
+        const flowData = {
+            nodes: [
+                { id: "start", type: "start", title: "Start", status: "completed", x: 100, y: 250 },
+                { id: "research", type: "task", title: "Research Topic", agent: "Research Specialist", status: "completed", description: "Gather relevant information and data about the topic from reliable sources.", x: 250, y: 150 },
+                { id: "outline", type: "task", title: "Create Content Outline", agent: "Content Manager", status: "completed", description: "Develop a structured outline based on research findings.", x: 450, y: 150 },
+                { id: "write", type: "task", title: "Write Draft Content", agent: "Content Writer", status: "in-progress", description: "Create the initial draft following the approved outline.", x: 650, y: 150 },
+                { id: "review", type: "task", title: "Review Content", agent: "Quality Assurance", status: "pending", description: "Check for accuracy, clarity, and adherence to guidelines.", x: 850, y: 150 },
+                { id: "revise", type: "task", title: "Revise Content", agent: "Content Writer", status: "pending", description: "Make necessary revisions based on review feedback.", x: 850, y: 350 },
+                { id: "approve", type: "task", title: "Approve Final Content", agent: "Content Manager", status: "pending", description: "Final review and approval of the content before publication.", x: 650, y: 350 },
+                { id: "end", type: "end", title: "End", status: "pending", x: 450, y: 350 }
+            ],
+            links: [
+                { source: "start", target: "research", active: true },
+                { source: "research", target: "outline", active: true },
+                { source: "outline", target: "write", active: true },
+                { source: "write", target: "review", active: false },
+                { source: "review", target: "revise", active: false },
+                { source: "revise", target: "approve", active: false },
+                { source: "approve", target: "end", active: false }
+            ],
+            agents: [
+                { id: "manager", name: "Content Manager", role: "Manager", icon: "\uf508" }, // user-tie
+                { id: "writer", name: "Content Writer", role: "Worker", icon: "\uf5ad" }, // pen-fancy
+                { id: "researcher", name: "Research Specialist", role: "Worker", icon: "\uf002" }, // magnifying-glass
+                { id: "qa", name: "Quality Assurance", role: "Worker", icon: "\uf560" } // check-double
+            ]
+        };
+        
+        // Set up the SVG
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        const svg = d3.select("#flow-diagram")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .call(d3.zoom().on("zoom", function(event) {
+                svg.attr("transform", event.transform);
+            }))
+            .append("g");
+        
+        // Define arrow marker
+        svg.append("defs").append("marker")
+            .attr("id", "arrowhead")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 20)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#9ca3af");
+        
+        // Create tooltip
+        const tooltip = d3.select("#tooltip");
+        
+        // Draw links
+        const link = svg.selectAll(".link")
+            .data(flowData.links)
+            .enter()
+            .append("path")
+            .attr("class", d => `link ${d.active ? "active" : ""}`)
+            .attr("d", d => {
+                const source = flowData.nodes.find(node => node.id === d.source);
+                const target = flowData.nodes.find(node => node.id === d.target);
+                
+                // Calculate path
+                const sourceX = source.x + 80; // node width/2
+                const sourceY = source.y;
+                const targetX = target.x - 80; // node width/2
+                const targetY = target.y;
+                
+                // Create a curved path
+                return `M${sourceX},${sourceY} C${(sourceX + targetX) / 2},${sourceY} ${(sourceX + targetX) / 2},${targetY} ${targetX},${targetY}`;
+            });
+        
+        // Draw nodes
+        const nodeGroup = svg.selectAll(".node")
+            .data(flowData.nodes)
+            .enter()
+            .append("g")
+            .attr("class", d => `node ${d.type}`)
+            .attr("transform", d => `translate(${d.x - 80},${d.y - 40})`) // Center node
+            .on("mouseover", function(event, d) {
+                // Show tooltip
+                tooltip.transition()
+                    .duration(200)
+                    .style("opacity", 0.9);
+                
+                let tooltipContent = `<h3>${d.title}</h3>`;
+                if (d.description) {
+                    tooltipContent += `<p>${d.description}</p>`;
+                }
+                if (d.agent) {
+                    tooltipContent += `<p><strong>Assigned to:</strong> ${d.agent}</p>`;
+                }
+                if (d.status) {
+                    tooltipContent += `<p><strong>Status:</strong> ${d.status.charAt(0).toUpperCase() + d.status.slice(1)}</p>`;
+                }
+                
+                tooltip.html(tooltipContent)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+            })
+            .on("mouseout", function() {
+                // Hide tooltip
+                tooltip.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+            });
+        
+        // Add node rectangles
+        nodeGroup.append("rect")
+            .attr("width", 160)
+            .attr("height", 80)
+            .attr("rx", 8)
+            .attr("ry", 8);
+        
+        // Add node titles
+        nodeGroup.append("text")
+            .attr("class", "title")
+            .attr("x", 80)
+            .attr("y", 30)
+            .attr("text-anchor", "middle")
+            .attr("dy", "0.3em")
+            .text(d => d.title);
+        
+        // Add agent names for task nodes
+        nodeGroup.filter(d => d.agent)
+            .append("text")
+            .attr("class", "subtitle")
+            .attr("x", 80)
+            .attr("y", 50)
+            .attr("text-anchor", "middle")
+            .attr("dy", "0.3em")
+            .text(d => d.agent);
+        
+        // Add status indicators
+        nodeGroup.filter(d => d.status)
+            .append("text")
+            .attr("class", d => `status ${d.status}`)
+            .attr("x", 80)
+            .attr("y", 65)
+            .attr("text-anchor", "middle")
+            .attr("dy", "0.3em")
+            .text(d => d.status.charAt(0).toUpperCase() + d.status.slice(1));
+        
+        // Make diagram responsive
+        window.addEventListener('resize', function() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            d3.select("#flow-diagram svg")
+                .attr("width", width)
+                .attr("height", height);
+        });
+    </script>
+</body>
+</html>
