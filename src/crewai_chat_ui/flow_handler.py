@@ -57,49 +57,24 @@ def find_flow_modules(directory: Optional[Path] = None) -> List[Path]:
         List of paths to potential flow files.
     """
     current_dir = directory or Path(os.getcwd())
-    print(f"Finding flow modules in: {current_dir}")
 
     # Collect all potential flow files
     potential_flow_files = []
 
     # Look for main.py files as requested
-    print("\nSearching for 'main.py' files...")
     all_main_files = list(current_dir.glob("**/main.py"))
-    print(f"Found {len(all_main_files)} 'main.py' files before filtering")
-
-    # Filter out main.py files from virtual environments and system directories
     filtered_main_files = [f for f in all_main_files if is_user_project_file(f)]
-    print(f"After filtering: {len(filtered_main_files)} 'main.py' files")
 
-    if filtered_main_files:
-        print("Filtered main.py files:")
-        for f in filtered_main_files:
-            print(f"  - {f}")
     potential_flow_files.extend(filtered_main_files)
 
     # If we still have no user project files, as a last resort, check all Python files in the directory
     if not potential_flow_files:
-        print(
-            "\nNo flow files found with standard patterns. Falling back to searching all Python files..."
-        )
         all_py_files = list(current_dir.glob("**/*.py"))
-        print(f"Found {len(all_py_files)} Python files before filtering")
-        # Filter out system files and keep only user project files
         filtered_files = [f for f in all_py_files if is_user_project_file(f)]
-        print(f"After filtering: {len(filtered_files)} Python files")
         limited_files = filtered_files[:10]  # Limit to avoid excessive search
-        if len(filtered_files) > 10:
-            print(f"Limiting to first 10 Python files to avoid excessive search")
-        if limited_files:
-            print("Selected Python files:")
-            for f in limited_files:
-                print(f"  - {f}")
         potential_flow_files.extend(limited_files)
 
     # Remove potential duplicates while preserving order
-    print(
-        f"\nRemoving duplicates from {len(potential_flow_files)} potential flow files..."
-    )
     seen = set()
     unique_flow_files = []
     for file in potential_flow_files:
@@ -107,7 +82,6 @@ def find_flow_modules(directory: Optional[Path] = None) -> List[Path]:
             seen.add(str(file))
             unique_flow_files.append(file)
 
-    print(f"Final list: {len(unique_flow_files)} unique potential flow files")
     return unique_flow_files
 
 
@@ -123,11 +97,8 @@ def load_flow_from_module(flow_path: Path) -> List[Tuple[Type[Flow], str]]:
     Raises:
         ImportError: If the module cannot be imported.
     """
-    print(f"Loading flow module: {flow_path}")
-
     # Get the module name from the file path
     module_name = flow_path.stem
-    print(f"Module name: {module_name}")
 
     # Add parent directories to sys.path if they're not already there
     parent_dirs = []
@@ -138,19 +109,13 @@ def load_flow_from_module(flow_path: Path) -> List[Tuple[Type[Flow], str]]:
 
     for parent_dir in parent_dirs:
         if parent_dir not in sys.path:
-            print(f"Adding parent directory to sys.path: {parent_dir}")
             sys.path.insert(0, parent_dir)
-        else:
-            print(f"Parent directory already in sys.path: {parent_dir}")
 
     # Load the module
-    print(f"Creating module spec...")
     spec = importlib.util.spec_from_file_location(module_name, flow_path)
     if spec is None:
-        print(f"Failed to create module spec for {flow_path}")
         raise ImportError(f"Could not load module from {flow_path}")
 
-    print(f"Creating module from spec...")
     module = importlib.util.module_from_spec(spec)
 
     # Set up the module's __package__ attribute correctly for package imports
@@ -159,58 +124,50 @@ def load_flow_from_module(flow_path: Path) -> List[Tuple[Type[Flow], str]]:
     else:
         module.__package__ = None
 
-    print(f"Executing module...")
     try:
         spec.loader.exec_module(module)
     except ModuleNotFoundError as e:
-        print(f"Module not found error: {e}")
-        
         # Try to detect package structure and add appropriate directories to sys.path
         missing_module = str(e).split("'")[1] if "'" in str(e) else ""
         if missing_module:
-            print(f"Trying to find package for missing module: {missing_module}")
-            
+
             # Look for potential package roots
             potential_roots = []
             for parent_dir in parent_dirs:
                 # Check if this is a src directory
-                if os.path.basename(parent_dir) == 'src':
+                if os.path.basename(parent_dir) == "src":
                     potential_roots.append(os.path.dirname(parent_dir))
-                
+
                 # Check if this directory contains the missing module
-                if os.path.exists(os.path.join(parent_dir, missing_module.replace('.', os.sep))):
+                if os.path.exists(
+                    os.path.join(parent_dir, missing_module.replace(".", os.sep))
+                ):
                     potential_roots.append(parent_dir)
-                
+
                 # Check if the parent contains the missing module
                 parent_of_parent = os.path.dirname(parent_dir)
-                if os.path.exists(os.path.join(parent_of_parent, missing_module.replace('.', os.sep))):
+                if os.path.exists(
+                    os.path.join(parent_of_parent, missing_module.replace(".", os.sep))
+                ):
                     potential_roots.append(parent_of_parent)
-            
+
             # Add all potential roots to sys.path
             for root in potential_roots:
                 if root not in sys.path:
-                    print(f"Adding potential package root to sys.path: {root}")
                     sys.path.insert(0, root)
-            
+
             # Try loading the module again
             try:
                 spec.loader.exec_module(module)
-                print(f"Successfully loaded module after adding package roots")
             except Exception as e2:
-                print(f"Error executing module after adding package roots: {e2}")
                 raise ImportError(f"Error executing module {flow_path}: {e2}")
         else:
             raise ImportError(f"Error executing module {flow_path}: {e}")
     except Exception as e:
-        print(f"Error executing module: {e}")
         raise ImportError(f"Error executing module {flow_path}: {e}")
 
     # Find all Flow subclasses in the module
-    print(f"Searching for Flow subclasses in module...")
     flow_classes = []
-
-    # Check if Flow is properly imported
-    print(f"Flow class type: {type(Flow)}")
 
     # List all classes in the module
     all_classes = []
@@ -218,33 +175,18 @@ def load_flow_from_module(flow_path: Path) -> List[Tuple[Type[Flow], str]]:
         if inspect.isclass(obj):
             all_classes.append((name, obj.__module__, obj.__name__))
 
-    print(f"Found {len(all_classes)} classes in module:")
-    for name, module_name, class_name in all_classes:
-        print(f"  - {name} (from {module_name})")
-
     # Now find Flow subclasses
     for name, obj in inspect.getmembers(module):
         try:
             if inspect.isclass(obj):
-                print(f"Checking class: {name} (module: {obj.__module__})")
-
                 # Check if it's a Flow subclass
                 is_subclass = issubclass(obj, Flow)
                 is_not_flow = obj != Flow
                 is_same_module = obj.__module__ == module.__name__
-
-                # Check if this is a main.py file
                 is_main_py = flow_path.name == "main.py"
-
-                print(f"  Is subclass of Flow: {is_subclass}")
-                print(f"  Is not Flow itself: {is_not_flow}")
-                print(f"  From same module: {is_same_module}")
-                print(f"  Is main.py file: {is_main_py}")
 
                 # For main.py files, we don't need to check module name
                 if is_subclass and is_not_flow and (is_same_module or is_main_py):
-                    print(f"  ✓ Class {name} qualifies as a Flow class")
-
                     # Generate a display name from the class name
                     display_name = re.sub(
                         r"([a-z])([A-Z])", r"\1 \2", name
@@ -256,14 +198,10 @@ def load_flow_from_module(flow_path: Path) -> List[Tuple[Type[Flow], str]]:
                         r"\s*Flow$", "", display_name
                     )  # Remove 'Flow' suffix if present
 
-                    print(f"  Display name: {display_name or name}")
                     flow_classes.append((obj, display_name or name))
-                else:
-                    print(f"  Class {name} does not qualify as a Flow class")
         except Exception as e:
             print(f"Error checking class {name}: {e}")
 
-    print(f"Found {len(flow_classes)} Flow classes in module")
     return flow_classes
 
 
@@ -284,42 +222,24 @@ class FlowHandler:
 
     def _discover_flows(self) -> None:
         """Discover flows from the flows directory."""
-        print(f"\nFlow discovery - Searching in directory: {self.flows_dir}")
 
         if not self.flows_dir.exists():
-            print(f"Flow discovery - Directory does not exist: {self.flows_dir}")
             return
 
-        print(f"Flow discovery - Finding flow modules...")
         flow_modules = find_flow_modules(self.flows_dir)
-        print(f"Flow discovery - Found {len(flow_modules)} potential flow modules:")
-        for i, module in enumerate(flow_modules):
-            print(f"  {i+1}. {module}")
-
         if not flow_modules:
-            print("Flow discovery - No potential flow modules found")
             return
 
         for flow_path in flow_modules:
-            print(f"\nFlow discovery - Examining module: {flow_path}")
             try:
                 flow_classes = load_flow_from_module(flow_path)
-                print(
-                    f"Flow discovery - Found {len(flow_classes)} flow classes in {flow_path}"
-                )
-
                 if not flow_classes:
-                    print(f"Flow discovery - No flow classes found in {flow_path}")
-                    print(f"Flow discovery - This might be because:")
-                    print(f"  1. No classes inherit from the Flow class")
-                    print(f"  2. The Flow class is not imported correctly")
-                    print(f"  3. Classes are defined but don't match the criteria")
                     continue
 
                 for flow_class, flow_name in flow_classes:
                     # Generate a unique ID for the flow
                     flow_id = f"{flow_class.__module__}.{flow_class.__name__}".lower()
-                    print(f"Flow discovery - Adding flow: {flow_name} (ID: {flow_id})")
+                    print(f"Adding flow: {flow_name} (ID: {flow_id})")
 
                     # Create flow metadata
                     self._flow_metadata[flow_id] = {
@@ -335,7 +255,7 @@ class FlowHandler:
                     # Instantiate the flow (lazy loading)
                     # We'll instantiate it only when needed in get_flow()
             except Exception as e:
-                print(f"Flow discovery - Error loading flow from {flow_path}: {e}")
+                print(f"Error loading flow from {flow_path}: {e}")
 
     def get_flows(self) -> List[Dict[str, Any]]:
         """Get all available flows.
