@@ -255,12 +255,61 @@ def directory_contains_flows(directory: Path) -> bool:
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
 
+            # Add parent directories to sys.path if they're not already there
+            parent_dirs = []
+            current_dir = py_file.parent
+            while current_dir != current_dir.parent:
+                parent_dirs.append(str(current_dir.absolute()))
+                current_dir = current_dir.parent
+
+            for parent_dir in parent_dirs:
+                if parent_dir not in sys.path:
+                    sys.path.insert(0, parent_dir)
+
+            # Set up the module's __package__ attribute correctly for package imports
+            if spec.submodule_search_locations:
+                module.__package__ = spec.name
+            else:
+                module.__package__ = None
+
             try:
                 spec.loader.exec_module(module)
-            except ImportError as e:
-                # Skip files with import errors but print diagnostic info
-                print(f"Import error when checking for flows in {py_file}: {str(e)}")
-                continue
+            except ModuleNotFoundError as e:
+                # Try to detect package structure and add appropriate directories to sys.path
+                missing_module = str(e).split("'")[1] if "'" in str(e) else ""
+                if missing_module:
+                    # Look for potential package roots
+                    potential_roots = []
+                    for parent_dir in parent_dirs:
+                        # Check if this is a src directory
+                        if os.path.basename(parent_dir) == "src":
+                            potential_roots.append(os.path.dirname(parent_dir))
+                        
+                        # Check if this directory contains the missing module
+                        if os.path.exists(os.path.join(parent_dir, missing_module.replace(".", os.sep))):
+                            potential_roots.append(parent_dir)
+                        
+                        # Check if the parent contains the missing module
+                        parent_of_parent = os.path.dirname(parent_dir)
+                        if os.path.exists(os.path.join(parent_of_parent, missing_module.replace(".", os.sep))):
+                            potential_roots.append(parent_of_parent)
+                    
+                    # Add all potential roots to sys.path
+                    for root in potential_roots:
+                        if root not in sys.path:
+                            sys.path.insert(0, root)
+                    
+                    # Try loading the module again
+                    try:
+                        spec.loader.exec_module(module)
+                    except Exception as e2:
+                        # Skip files with import errors but print diagnostic info
+                        print(f"Import error when checking for flows in {py_file}: {str(e2)}")
+                        continue
+                else:
+                    # Skip files with import errors but print diagnostic info
+                    print(f"Import error when checking for flows in {py_file}: {str(e)}")
+                    continue
             except Exception as e:
                 # Skip files that can't be executed for other reasons
                 print(f"Error when checking for flows in {py_file}: {str(e)}")
