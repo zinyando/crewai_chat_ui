@@ -3,3 +3,4 @@ __pycache__
 .venv
 .eggs
 crewai_chat_ui.egg-info
+dist
