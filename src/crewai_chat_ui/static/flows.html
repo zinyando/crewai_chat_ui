@@ -538,6 +538,90 @@
                 grid-template-columns: 1fr;
             }
         }
+        
+        /* Crew information styles */
+        .crew-section {
+            margin-bottom: 1.5rem;
+            display: block !important; /* Force display for debugging */
+            border: 2px solid var(--primary-color); /* Add border for visibility */
+            padding: 10px;
+            margin-top: 1rem;
+        }
+        
+        .crew-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+        
+        .crew-info {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .crew-info h4 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+            color: var(--primary-color);
+        }
+        
+        .crew-info p {
+            margin: 0.5rem 0;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        
+        .crew-agents {
+            margin-top: 1rem;
+        }
+        
+        .crew-agent-item {
+            padding: 0.5rem;
+            border-left: 3px solid var(--primary-color);
+            margin-bottom: 0.5rem;
+            background-color: var(--bg-secondary);
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .crew-agent-item h5 {
+            margin: 0;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .crew-agent-item p {
+            margin: 0.25rem 0;
+            font-size: 0.8rem;
+        }
+        
+        .crew-agent-role {
+            font-size: 0.7rem;
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+    </style>
+    
+    <!-- Debug styles to ensure crew section is visible -->
+    <style>
+        #crew-section {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+            z-index: 1000 !important;
+        }
+        
+        #crew-info {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
     </style>
 </head>
 <body>
@@ -555,6 +639,14 @@
                     <option value="customer_support">Customer Support Flow</option>
                 </select>
             </div>
+            <!-- Crew Information -->
+            <div class="crew-section" id="crew-section" style="background-color: #f0f8ff; border: 3px dashed #ff6b6b; padding: 15px; margin: 15px 0;">
+                <h3 style="color: #ff6b6b;">Associated Crew</h3>
+                <div id="crew-info" class="crew-info" style="background-color: #fff; border: 1px solid #ccc;">
+                    <div class="loading">Loading crew information...</div>
+                </div>
+            </div>
+            
             <div class="agents-list" id="agents-list">
                 <!-- Agents will be populated dynamically -->
                 <div class="agent-card">

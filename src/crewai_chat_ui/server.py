@@ -90,6 +90,15 @@ def get_flow(flow_id):
             flow_handler = FlowHandler()
 
         flow = flow_handler.get_flow(flow_id)
+        
+        # Debug: Log the flow data to check if crew information is included
+        print(f"API - Flow data for {flow_id}:")
+        print(f"Flow keys: {flow.keys()}")
+        if 'crew' in flow:
+            print(f"Crew information found: {flow['crew']}")
+        else:
+            print("No crew information found in flow data")
+            
         return jsonify({"status": "success", "flow": flow})
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 404

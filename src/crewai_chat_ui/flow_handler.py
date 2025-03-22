@@ -363,6 +363,83 @@ class FlowHandler:
                     }
                 )
 
+            # Get associated crew information if available
+            crew_info = None
+            try:
+                print(f"Checking for crew in flow: {flow_id}")
+                print(f"Flow instance attributes: {dir(flow_instance)}")
+                
+                # Check if the flow has a crew attribute
+                if hasattr(flow_instance, 'crew'):
+                    print(f"Flow has crew attribute: {flow_instance.crew}")
+                    if flow_instance.crew is not None:
+                        crew = flow_instance.crew
+                        print(f"Crew object: {crew}")
+                        print(f"Crew attributes: {dir(crew)}")
+                        
+                        crew_agents = getattr(crew, 'agents', [])
+                        print(f"Crew agents: {crew_agents}")
+                        
+                        crew_agents_info = []
+                        for agent in crew_agents:
+                            print(f"Processing agent: {agent}")
+                            print(f"Agent attributes: {dir(agent)}")
+                            
+                            agent_info = {
+                                "name": getattr(agent, 'name', 'Unknown Agent'),
+                                "role": getattr(agent, 'role', 'Unknown Role'),
+                                "description": getattr(agent, 'description', 'No description available')
+                            }
+                            print(f"Agent info: {agent_info}")
+                            crew_agents_info.append(agent_info)
+                        
+                        crew_info = {
+                            "name": getattr(crew, 'name', 'Associated Crew'),
+                            "description": getattr(crew, 'description', 'No description available'),
+                            "agents": crew_agents_info
+                        }
+                        print(f"Final crew info: {crew_info}")
+                else:
+                    print(f"Flow does not have crew attribute")
+                    
+                    # Try to find crew in other attributes
+                    for attr_name in dir(flow_instance):
+                        if attr_name.startswith('__'):
+                            continue
+                        
+                        attr = getattr(flow_instance, attr_name)
+                        try:
+                            if hasattr(attr, 'agents'):
+                                print(f"Found potential crew in attribute: {attr_name}")
+                                potential_crew = attr
+                                crew_agents = getattr(potential_crew, 'agents', [])
+                                
+                                if crew_agents and len(crew_agents) > 0:
+                                    print(f"Found crew agents in {attr_name}: {crew_agents}")
+                                    
+                                    crew_agents_info = []
+                                    for agent in crew_agents:
+                                        agent_info = {
+                                            "name": getattr(agent, 'name', 'Unknown Agent'),
+                                            "role": getattr(agent, 'role', 'Unknown Role'),
+                                            "description": getattr(agent, 'description', 'No description available')
+                                        }
+                                        crew_agents_info.append(agent_info)
+                                    
+                                    crew_info = {
+                                        "name": getattr(potential_crew, 'name', attr_name),
+                                        "description": getattr(potential_crew, 'description', f"Crew from {attr_name}"),
+                                        "agents": crew_agents_info
+                                    }
+                                    print(f"Created crew info from {attr_name}: {crew_info}")
+                                    break
+                        except Exception as inner_e:
+                            print(f"Error checking attribute {attr_name}: {inner_e}")
+            except Exception as e:
+                print(f"Error getting crew information: {e}")
+                import traceback
+                print(traceback.format_exc())
+                
             # Create flow data structure
             flow_data = {
                 "name": metadata["name"],
@@ -378,6 +455,30 @@ class FlowHandler:
                 "agents": formatted_agents,
                 "tasks": formatted_tasks,
             }
+            
+            # Add crew information if available
+            if crew_info:
+                print(f"Adding crew info to flow data: {crew_info}")
+                flow_data["crew"] = crew_info
+            else:
+                # Add a placeholder crew for testing
+                print("No crew info found, adding placeholder for testing")
+                flow_data["crew"] = {
+                    "name": "Test Crew",
+                    "description": "This is a placeholder crew for testing purposes.",
+                    "agents": [
+                        {
+                            "name": "Test Agent 1",
+                            "role": "Tester",
+                            "description": "A test agent to verify crew display functionality."
+                        },
+                        {
+                            "name": "Test Agent 2",
+                            "role": "Developer",
+                            "description": "Another test agent to verify crew display functionality."
+                        }
+                    ]
+                }
 
             return flow_data
 
