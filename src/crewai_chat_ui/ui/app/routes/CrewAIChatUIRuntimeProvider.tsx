@@ -21,7 +21,7 @@ function generateUUID() {
 // Fetch available crews from the server
 async function fetchCrews() {
   try {
-    const response = await fetch('http://localhost:8000/api/crews');
+    const response = await fetch('/api/crews');
     const data = await response.json();
     
     if (data.status === "success" && Array.isArray(data.crews)) {
@@ -58,7 +58,7 @@ const CrewAIChatUIModelAdapter: ChatModelAdapter = {
     });
     
     // Prepare the request payload according to our FastAPI server's expected format
-    const response = await fetch("http://localhost:8000/api/chat", {
+    const response = await fetch("/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -106,7 +106,7 @@ async function initializeChat() {
     const { currentChatId, currentCrewId } = useChatStore.getState();
     
     // Call the initialize endpoint
-    const response = await fetch(`http://localhost:8000/api/initialize`, {
+    const response = await fetch(`/api/initialize`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
