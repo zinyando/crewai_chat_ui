@@ -1,10 +1,19 @@
 import { useEffect } from 'react'
-import { useSearchParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { ThreadPrimitive, ComposerPrimitive, MessagePrimitive } from '@assistant-ui/react'
 import { ChatSidebar } from '~/components/assistant-ui/chat-sidebar'
 import { useChatStore } from '~/lib/store'
 import { CrewAIChatUIRuntimeProvider } from './CrewAIChatUIRuntimeProvider'
 import { MarkdownText } from '~/components/assistant-ui/markdown-text'
+
+// Loading fallback component
+function LoadingFallback() {
+  return (
+    <div className="flex h-screen items-center justify-center">
+      <div className="text-lg">Loading chat...</div>
+    </div>
+  )
+}
 
 const UserMessage = () => (
   <MessagePrimitive.Root>
@@ -56,9 +65,14 @@ function Thread() {
   )
 }
 
+export function HydrateFallback() {
+  return <LoadingFallback />
+}
+
 export default function ChatLayout() {
+  const navigate = useNavigate()
+  const { chatId } = useParams()
   const [searchParams] = useSearchParams()
-  const chatId = searchParams.get('chatId')
   const crewId = searchParams.get('crew')
   
   const {
@@ -69,16 +83,19 @@ export default function ChatLayout() {
     chatHistory,
   } = useChatStore()
 
-  // Sync query params with store state
+  // Sync URL params with store state
   useEffect(() => {
     if (chatId && chatId !== currentChatId) {
       if (chatHistory[chatId]) {
         setCurrentChat(chatId)
         // Store chat ID in localStorage for the runtime
         localStorage.setItem('crewai_chat_id', chatId)
+      } else {
+        // Chat doesn't exist, redirect to home
+        navigate('/')
       }
     }
-  }, [chatId, currentChatId, chatHistory, setCurrentChat])
+  }, [chatId, currentChatId, chatHistory, navigate, setCurrentChat])
 
   useEffect(() => {
     if (crewId !== currentCrewId) {
@@ -93,7 +110,7 @@ export default function ChatLayout() {
   }, [crewId, currentCrewId, setCurrentCrew])
 
   if (!currentChatId) {
-    return null
+    return <LoadingFallback />
   }
 
   return (
