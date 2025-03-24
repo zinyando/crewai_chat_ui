@@ -5,6 +5,14 @@ import sys
 from pathlib import Path
 import threading
 from typing import Dict, Optional, List
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import uvicorn
+import click
+import socket
 
 # Configure logging
 logging.basicConfig(
@@ -15,10 +23,6 @@ logging.basicConfig(
 log = logging.getLogger("werkzeug")
 log.setLevel(logging.ERROR)
 
-import click
-from flask import Flask, request, jsonify, render_template, send_from_directory
-import importlib.resources as pkg_resources
-
 from crewai_chat_ui.crew_loader import (
     load_crew,
     load_crew_from_module,
@@ -26,61 +30,67 @@ from crewai_chat_ui.crew_loader import (
 )
 from crewai_chat_ui.chat_handler import ChatHandler
 
+# Create FastAPI app
+app = FastAPI()
 
-# Create Flask app
-app = Flask(__name__)
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# Global state
 chat_handler = None
-
-# Dictionary to store cached chat handlers
 chat_handlers: Dict[str, ChatHandler] = {}
-
-# Dictionary to store chat threads by chat_id
 chat_threads: Dict[str, Dict[str, List]] = {}
-
-# Stores discovered crews information
 discovered_crews: List[Dict] = []
 
 
-@app.route("/")
-def index():
+# Pydantic models for request/response validation
+class ChatMessage(BaseModel):
+    message: str
+    crew_id: Optional[str] = None
+    chat_id: Optional[str] = None
+
+
+class InitializeRequest(BaseModel):
+    crew_id: Optional[str] = None
+    chat_id: Optional[str] = None
+
+
+@app.get("/")
+async def index():
     """Serve the main chat interface."""
-    static_dir = Path(__file__).parent / "static"
-    return send_from_directory(static_dir, "index.html")
+    return FileResponse(static_dir / "index.html")
 
 
-@app.route("/static/<path:path>")
-def serve_static(path):
-    """Serve static files."""
-    static_dir = Path(__file__).parent / "static"
-    return send_from_directory(static_dir, path)
-
-
-@app.route("/api/chat", methods=["POST"])
-def chat():
+@app.post("/api/chat")
+async def chat(message: ChatMessage) -> JSONResponse:
     """API endpoint to handle chat messages."""
     global chat_handler
 
-    data = request.json
-    user_message = data.get("message", "")
-    crew_id = data.get("crew_id", None)
-    chat_id = data.get("chat_id", None)
+    user_message = message.message
+    crew_id = message.crew_id
+    chat_id = message.chat_id
     logging.debug(f"Received chat message for chat_id: {chat_id}, crew_id: {crew_id}")
 
     if not user_message:
         logging.warning("No message provided in request")
-        return jsonify({"error": "No message provided"}), 400
+        raise HTTPException(status_code=400, detail="No message provided")
 
     try:
         # If no chat_id is provided, we can't properly track the thread
         if not chat_id:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "content": "No chat ID provided. Unable to track conversation thread.",
-                    }
-                ),
-                400,
+            raise HTTPException(
+                status_code=400,
+                detail="No chat ID provided. Unable to track conversation thread.",
             )
 
         # If a specific crew_id is provided, use that chat handler
@@ -89,14 +99,9 @@ def chat():
             # Update the global chat handler to track the currently active one
             chat_handler = handler
         elif chat_handler is None:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "content": "No crew has been initialized. Please select a crew first.",
-                    }
-                ),
-                400,
+            raise HTTPException(
+                status_code=400,
+                detail="No crew has been initialized. Please select a crew first.",
             )
 
         # Always store messages in the appropriate chat thread
@@ -180,7 +185,6 @@ def chat():
             )
 
         # Always include the chat_id in the response to ensure proper thread tracking
-        # This is critical for the client to know which thread the response belongs to
         response["chat_id"] = chat_id
         response["crew_id"] = (
             crew_id if crew_id else getattr(chat_handler, "crew_name", "default")
@@ -189,30 +193,26 @@ def chat():
             f"Sending response for chat_id: {chat_id}, crew_id: {response['crew_id']}"
         )
 
-        return jsonify(response)
+        return JSONResponse(content=response)
     except Exception as e:
         error_message = f"Error processing chat message: {str(e)}"
         logging.error(error_message, exc_info=True)
-        return jsonify({"status": "error", "content": error_message}), 500
+        raise HTTPException(status_code=500, detail=error_message)
 
 
-@app.route("/api/initialize", methods=["GET", "POST"])
-def initialize():
+@app.post("/api/initialize")
+@app.get("/api/initialize")
+async def initialize(request: InitializeRequest = None) -> JSONResponse:
     """Initialize the chat handler and return initial message."""
     global chat_handler
 
+    # Handle both GET and POST requests
     crew_id = None
     chat_id = None
 
-    if request.method == "POST":
-        # For POST, get crew_id and chat_id from JSON body
-        data = request.json or {}
-        crew_id = data.get("crew_id")
-        chat_id = data.get("chat_id")
-    else:
-        # For GET, get crew_id and chat_id from query params
-        crew_id = request.args.get("crew_id")
-        chat_id = request.args.get("chat_id")
+    if request:
+        crew_id = request.crew_id
+        chat_id = request.chat_id
 
     logging.debug(f"Initializing chat with crew_id: {crew_id}, chat_id: {chat_id}")
 
@@ -231,14 +231,9 @@ def initialize():
                         break
 
                 if not crew_path:
-                    return (
-                        jsonify(
-                            {
-                                "status": "error",
-                                "message": f"Crew with ID {crew_id} not found",
-                            }
-                        ),
-                        404,
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Crew with ID {crew_id} not found",
                     )
 
                 # Load and initialize the specified crew
@@ -294,8 +289,8 @@ def initialize():
                 chat_handler.messages = []
                 logging.debug(f"Created new chat thread for chat_id: {chat_id}")
 
-        return jsonify(
-            {
+        return JSONResponse(
+            content={
                 "status": "success",
                 "message": initial_message,
                 "required_inputs": [
@@ -305,17 +300,17 @@ def initialize():
                 "crew_id": crew_id or chat_handler.crew_name,
                 "crew_name": chat_handler.crew_name,
                 "crew_description": chat_handler.crew_chat_inputs.crew_description,
-                "chat_id": chat_id,  # Return the chat ID in the response
+                "chat_id": chat_id,
             }
         )
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.route("/api/crews", methods=["GET"])
-def get_available_crews():
+@app.get("/api/crews")
+async def get_available_crews() -> JSONResponse:
     """Get a list of all available crews."""
-    return jsonify({"status": "success", "crews": discovered_crews})
+    return JSONResponse(content={"status": "success", "crews": discovered_crews})
 
 
 def show_loading(stop_event, message):
@@ -327,6 +322,20 @@ def show_loading(stop_event, message):
         counter += 1
         threading.Event().wait(0.5)
     click.echo()  # Final newline
+
+
+def find_available_port(start_port: int = 8000, max_attempts: int = 100) -> int:
+    """Find the next available port starting from start_port."""
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("", port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(
+        f"Could not find an available port after {max_attempts} attempts"
+    )
 
 
 def main():
@@ -414,24 +423,31 @@ def main():
             click.echo(f"Error discovering crews: {str(e)}", err=True)
             sys.exit(1)
 
-        # Start the Flask server
+        # Start the FastAPI server with uvicorn
         host = "0.0.0.0"  # Listen on all interfaces
-        port = 4200
+        default_port = 8000
 
-        click.echo(click.style(f"Server running! Access the chat UI at: ", fg="green") + 
-                 click.style(f"http://localhost:{port}", fg="bright_green", bold=True))
+        try:
+            port = find_available_port(default_port)
+            if port != default_port:
+                click.echo(
+                    click.style(
+                        f"Port {default_port} is in use, using port {port} instead",
+                        fg="yellow",
+                    )
+                )
+        except RuntimeError as e:
+            click.echo(f"Error finding available port: {str(e)}", err=True)
+            sys.exit(1)
+
+        click.echo(
+            click.style(f"Server running! Access the chat UI at: ", fg="green")
+            + click.style(f"http://localhost:{port}", fg="bright_green", bold=True)
+        )
         click.echo(click.style("Press Ctrl+C to stop the server", fg="yellow"))
 
-        # Create a custom log handler to filter out non-localhost URLs
-        import logging
-        from flask.logging import default_handler
-
-        # Remove default handlers
-        app.logger.handlers.clear()
-
-        # Run the Flask app with minimal logging
-        app.run(host=host, port=port, debug=False, use_reloader=False)
-
+        # Run the FastAPI app with uvicorn
+        uvicorn.run(app, host=host, port=port, log_level="error")
 
     except KeyboardInterrupt:
         click.echo("\nServer stopped")
