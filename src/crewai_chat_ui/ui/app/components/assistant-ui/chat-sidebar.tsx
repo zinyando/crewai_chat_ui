@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { Moon, Plus, Sun, Trash2 } from 'lucide-react'
 import { Button } from '~/components/ui/button'
 import {
@@ -17,7 +17,7 @@ interface ChatSidebarProps {
 }
 
 export const ChatSidebar = ({ children }: ChatSidebarProps) => {
-  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const {
     crews,
     currentCrewId,
@@ -41,22 +41,35 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     const chatId = generateChatId()
     createChat(chatId, currentCrewId)
     setCurrentChat(chatId)
-    navigate(`/chat/${chatId}${currentCrewId ? `?crew=${currentCrewId}` : ''}`)
+    setSearchParams(params => {
+      params.set('chatId', chatId)
+      if (currentCrewId) {
+        params.set('crew', currentCrewId)
+      }
+      return params
+    })
   }
 
   // Handle crew selection
   const handleCrewChange = (crewId: string) => {
     setCurrentCrew(crewId)
-    if (currentChatId) {
-      navigate(`/chat/${currentChatId}?crew=${crewId}`)
-    }
+    setSearchParams(params => {
+      params.set('crew', crewId)
+      return params
+    })
   }
 
   // Handle chat selection
   const handleChatSelect = (chatId: string) => {
     setCurrentChat(chatId)
     const chat = chatHistory[chatId]
-    navigate(`/chat/${chatId}${chat.crewId ? `?crew=${chat.crewId}` : ''}`)
+    setSearchParams(params => {
+      params.set('chatId', chatId)
+      if (chat.crewId) {
+        params.set('crew', chat.crewId)
+      }
+      return params
+    })
   }
 
   // Handle chat deletion
@@ -65,7 +78,10 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
       deleteChat(chatId)
       if (currentChatId === chatId) {
         setCurrentChat(null)
-        navigate('/')
+        setSearchParams(params => {
+          params.delete('chatId')
+          return params
+        })
       }
     }
   }

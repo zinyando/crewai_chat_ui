@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { ThreadPrimitive, ComposerPrimitive, MessagePrimitive } from '@assistant-ui/react'
 import { ChatSidebar } from '~/components/assistant-ui/chat-sidebar'
-import { useChatStore, type ChatMessage } from '~/lib/store'
+import { useChatStore } from '~/lib/store'
 import { CrewAIChatUIRuntimeProvider } from './CrewAIChatUIRuntimeProvider'
 import { MarkdownText } from '~/components/assistant-ui/markdown-text'
 
@@ -57,9 +57,8 @@ function Thread() {
 }
 
 export default function ChatLayout() {
-  const navigate = useNavigate()
-  const { chatId } = useParams()
   const [searchParams] = useSearchParams()
+  const chatId = searchParams.get('chatId')
   const crewId = searchParams.get('crew')
   
   const {
@@ -70,19 +69,16 @@ export default function ChatLayout() {
     chatHistory,
   } = useChatStore()
 
-  // Sync URL params with store state
+  // Sync query params with store state
   useEffect(() => {
     if (chatId && chatId !== currentChatId) {
       if (chatHistory[chatId]) {
         setCurrentChat(chatId)
         // Store chat ID in localStorage for the runtime
         localStorage.setItem('crewai_chat_id', chatId)
-      } else {
-        // Chat doesn't exist, redirect to home
-        navigate('/')
       }
     }
-  }, [chatId, currentChatId, chatHistory, navigate, setCurrentChat])
+  }, [chatId, currentChatId, chatHistory, setCurrentChat])
 
   useEffect(() => {
     if (crewId !== currentCrewId) {
@@ -95,6 +91,10 @@ export default function ChatLayout() {
       }
     }
   }, [crewId, currentCrewId, setCurrentCrew])
+
+  if (!currentChatId) {
+    return null
+  }
 
   return (
     <CrewAIChatUIRuntimeProvider>
