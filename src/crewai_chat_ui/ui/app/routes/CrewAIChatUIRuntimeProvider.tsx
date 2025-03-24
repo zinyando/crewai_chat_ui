@@ -8,6 +8,7 @@ import {
   type ThreadMessage,
 } from "@assistant-ui/react";
 import { useChatStore } from "~/lib/store";
+import { useEffect } from "react";
 
 // Generate a random UUID for chat_id if not provided
 function generateUUID() {
@@ -138,10 +139,12 @@ export function CrewAIChatUIRuntimeProvider({
   const runtime = useLocalRuntime(CrewAIChatUIModelAdapter);
   
   // Initialize the chat when the component is mounted
-  if (typeof window !== 'undefined') {
-    // Only run in browser environment
-    initializeChat();
-  }
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Only run in browser environment
+      initializeChat();
+    }
+  }, []); // Empty dependency array means this only runs once on mount
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
