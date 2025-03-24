@@ -67,20 +67,6 @@ class InitializeRequest(BaseModel):
     chat_id: Optional[str] = None
 
 
-@app.get("/{full_path:path}")
-async def serve_react_app(full_path: str):
-    """Serve the React application and handle client-side routing."""
-    # Check if the path points to an existing file in the build directory
-    requested_file = ui_dir / full_path
-
-    if requested_file.exists() and requested_file.is_file():
-        return FileResponse(requested_file)
-
-    # If ui/build/client/index.html exists, serve it for client-side routing
-    if ui_dir.exists() and (ui_dir / "index.html").exists():
-        return FileResponse(ui_dir / "index.html")
-
-
 @app.post("/api/chat")
 async def chat(message: ChatMessage) -> JSONResponse:
     """API endpoint to handle chat messages."""
@@ -321,6 +307,20 @@ async def initialize(request: InitializeRequest = None) -> JSONResponse:
 async def get_available_crews() -> JSONResponse:
     """Get a list of all available crews."""
     return JSONResponse(content={"status": "success", "crews": discovered_crews})
+
+
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    """Serve the React application and handle client-side routing."""
+    # Check if the path points to an existing file in the build directory
+    requested_file = ui_dir / full_path
+
+    if requested_file.exists() and requested_file.is_file():
+        return FileResponse(requested_file)
+
+    # If ui/build/client/index.html exists, serve it for client-side routing
+    if ui_dir.exists() and (ui_dir / "index.html").exists():
+        return FileResponse(ui_dir / "index.html")
 
 
 def show_loading(stop_event, message):
