@@ -5,7 +5,9 @@ import {
   AssistantRuntimeProvider,
   useLocalRuntime,
   type ChatModelAdapter,
+  type ThreadMessage,
 } from "@assistant-ui/react";
+import { useChatStore } from "~/lib/store";
 
 // Generate a random UUID for chat_id if not provided
 function generateUUID() {
@@ -16,17 +18,44 @@ function generateUUID() {
   });
 }
 
+// Fetch available crews from the server
+async function fetchCrews() {
+  try {
+    const response = await fetch('http://localhost:8000/api/crews');
+    const data = await response.json();
+    
+    if (data.status === "success" && Array.isArray(data.crews)) {
+      // Update the store with available crews
+      useChatStore.getState().setCrews(data.crews);
+    } else {
+      console.error("Failed to fetch crews", data);
+    }
+  } catch (error) {
+    console.error("Error fetching crews", error);
+  }
+}
+
 const CrewAIChatUIModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    // Extract the last message which is from the user
-    const lastMessage = messages[messages.length - 1];
+    const { currentChatId, currentCrewId, addMessage } = useChatStore.getState();
     
-    // Generate a chat_id if we don't have one stored in localStorage
-    let chatId = localStorage.getItem('crewai_chat_id');
-    if (!chatId) {
-      chatId = generateUUID();
-      localStorage.setItem('crewai_chat_id', chatId);
-    }
+    // Extract the last message which is from the user
+    const lastMessage = messages[messages.length - 1] as ThreadMessage;
+    const userContent = typeof lastMessage.content === 'string' 
+      ? lastMessage.content 
+      : lastMessage.content[0]?.type === 'text' 
+        ? lastMessage.content[0].text 
+        : '';
+    
+    // Get chat_id from store or generate a new one
+    const chatId = currentChatId || generateUUID();
+    
+    // Add the user message to our store
+    addMessage(chatId, {
+      role: lastMessage.role,
+      content: userContent,
+      timestamp: Date.now(),
+    });
     
     // Prepare the request payload according to our FastAPI server's expected format
     const response = await fetch("http://localhost:8000/api/chat", {
@@ -35,8 +64,9 @@ const CrewAIChatUIModelAdapter: ChatModelAdapter = {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        message: lastMessage.content,
+        message: userContent,
         chat_id: chatId,
+        crew_id: currentCrewId,
       }),
       signal: abortSignal,
     });
@@ -49,6 +79,13 @@ const CrewAIChatUIModelAdapter: ChatModelAdapter = {
     const data = await response.json();
     
     if (data.status === "success" && data.content) {
+      // Add the assistant message to our store
+      addMessage(chatId, {
+        role: 'assistant',
+        content: data.content,
+        timestamp: Date.now(),
+      });
+      
       // Return the content as a text message
       yield {
         content: [{ type: "text", text: data.content }],
@@ -63,23 +100,27 @@ const CrewAIChatUIModelAdapter: ChatModelAdapter = {
 // Initialize the chat when the component is mounted
 async function initializeChat() {
   try {
-    // Get or create a chat_id
-    let chatId = localStorage.getItem('crewai_chat_id');
-    if (!chatId) {
-      chatId = generateUUID();
-      localStorage.setItem('crewai_chat_id', chatId);
-    }
+    // First fetch available crews
+    await fetchCrews();
+    
+    const { currentChatId, currentCrewId } = useChatStore.getState();
     
     // Call the initialize endpoint
-    const response = await fetch(`http://localhost:8000/api/initialize?chat_id=${chatId}`);
+    const response = await fetch(`http://localhost:8000/api/initialize`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: currentChatId,
+        crew_id: currentCrewId,
+      }),
+    });
+    
     const data = await response.json();
     
     if (data.status === "success") {
       console.log("Chat initialized successfully", data);
-      // Store crew_id if provided
-      if (data.crew_id) {
-        localStorage.setItem('crewai_crew_id', data.crew_id);
-      }
     } else {
       console.error("Failed to initialize chat", data);
     }
