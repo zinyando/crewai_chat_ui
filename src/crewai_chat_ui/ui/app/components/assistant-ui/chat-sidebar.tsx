@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Moon, Plus, Sun, Trash2 } from 'lucide-react'
 import { Button } from '~/components/ui/button'
@@ -11,6 +11,7 @@ import {
 } from "~/components/ui/select"
 import { useChatStore } from '~/lib/store'
 import { cn } from '~/lib/utils'
+import { DeleteChatModal } from './delete-chat-modal'
 
 interface ChatSidebarProps {
   children?: ReactNode
@@ -18,6 +19,7 @@ interface ChatSidebarProps {
 
 export const ChatSidebar = ({ children }: ChatSidebarProps) => {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null)
   const {
     crews,
     currentCrewId,
@@ -74,15 +76,20 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
 
   // Handle chat deletion
   const handleDeleteChat = (chatId: string) => {
-    if (window.confirm('Are you sure you want to delete this chat?')) {
-      deleteChat(chatId)
-      if (currentChatId === chatId) {
+    setChatToDelete(chatId)
+  }
+
+  const confirmDelete = () => {
+    if (chatToDelete) {
+      deleteChat(chatToDelete)
+      if (currentChatId === chatToDelete) {
         setCurrentChat(null)
         setSearchParams(params => {
           params.delete('chatId')
           return params
         })
       }
+      setChatToDelete(null)
     }
   }
 
@@ -92,77 +99,84 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
   )
 
   return (
-    <aside className="flex h-full w-64 flex-col bg-background border-r">
-      <div className="flex items-center justify-between p-4">
-        <h2 className="text-lg font-semibold">CrewAI Chat UI</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleDarkMode}
-          className="h-8 w-8"
-        >
-          {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </Button>
-      </div>
-
-      <div className="p-4">
-        <Select
-          value={currentCrewId || ''}
-          onValueChange={handleCrewChange}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a crew" />
-          </SelectTrigger>
-          <SelectContent>
-            {crews.map((crew) => (
-              <SelectItem key={crew.id} value={crew.id}>
-                {crew.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Button
-        onClick={handleNewChat}
-        className="mx-4 mb-4"
-      >
-        <Plus className="mr-2 h-4 w-4" />
-        New Chat
-      </Button>
-
-      <div className="flex-1 overflow-y-auto p-2">
-        {sortedChats.map((chat) => (
-          <div
-            key={chat.id}
-            className={cn(
-              'group flex items-center justify-between rounded-lg px-3 py-2 hover:bg-accent/50 cursor-pointer',
-              currentChatId === chat.id && 'bg-accent'
-            )}
-            onClick={() => handleChatSelect(chat.id)}
+    <>
+      <aside className="flex h-full w-64 flex-col bg-background border-r">
+        <div className="flex items-center justify-between p-4">
+          <h2 className="text-lg font-semibold">CrewAI Chat UI</h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleDarkMode}
+            className="h-8 w-8"
           >
-            <div className="flex-1 truncate">
-              <p className="truncate text-sm">{chat.title}</p>
-              {chat.crewName && (
-                <p className="truncate text-xs text-muted-foreground">
-                  {chat.crewName}
-                </p>
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+        </div>
+
+        <div className="p-4">
+          <Select
+            value={currentCrewId || ''}
+            onValueChange={handleCrewChange}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a crew" />
+            </SelectTrigger>
+            <SelectContent>
+              {crews.map((crew) => (
+                <SelectItem key={crew.id} value={crew.id}>
+                  {crew.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Button
+          onClick={handleNewChat}
+          className="mx-4 mb-4"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          New Chat
+        </Button>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {sortedChats.map((chat) => (
+            <div
+              key={chat.id}
+              className={cn(
+                'group flex items-center justify-between rounded-lg px-3 py-2 hover:bg-accent/50 cursor-pointer',
+                currentChatId === chat.id && 'bg-accent'
               )}
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 opacity-0 group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleDeleteChat(chat.id)
-              }}
+              onClick={() => handleChatSelect(chat.id)}
             >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-      </div>
-    </aside>
+              <div className="flex-1 truncate">
+                <p className="truncate text-sm">{chat.title}</p>
+                {chat.crewName && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {chat.crewName}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDeleteChat(chat.id)
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </aside>
+      <DeleteChatModal
+        isOpen={chatToDelete !== null}
+        onClose={() => setChatToDelete(null)}
+        onConfirm={confirmDelete}
+      />
+    </>
   )
 } 

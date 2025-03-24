@@ -109,9 +109,9 @@ export default function ChatLayout() {
     }
   }, [crewId, currentCrewId, setCurrentCrew])
 
-  if (!currentChatId) {
-    return <LoadingFallback />
-  }
+  // if (!currentChatId) {
+  //   return <LoadingFallback />
+  // }
 
   return (
     <CrewAIChatUIRuntimeProvider>
