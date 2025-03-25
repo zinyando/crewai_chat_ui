@@ -35,6 +35,7 @@ interface ChatState {
   createChat: (chatId: string, crewId: string | null, title?: string) => void
   deleteChat: (chatId: string) => void
   toggleDarkMode: () => void
+  updateChatTitle: (chatId: string, title: string) => void
 }
 
 export const useChatStore = create<ChatState>()(
@@ -105,6 +106,22 @@ export const useChatStore = create<ChatState>()(
 
       toggleDarkMode: () =>
         set((state) => ({ isDarkMode: !state.isDarkMode })),
+
+      updateChatTitle: (chatId, title) =>
+        set((state) => {
+          const chat = state.chatHistory[chatId]
+          if (!chat) return state
+
+          return {
+            chatHistory: {
+              ...state.chatHistory,
+              [chatId]: {
+                ...chat,
+                title,
+              },
+            },
+          }
+        }),
     }),
     {
       name: 'chat-storage',

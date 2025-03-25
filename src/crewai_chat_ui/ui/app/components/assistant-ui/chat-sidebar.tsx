@@ -75,7 +75,8 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
   // Create a new chat
   const handleNewChat = () => {
     const chatId = generateChatId()
-    createChat(chatId, currentCrewId)
+    const chatTitle = "New Chat" // Set a default title or prompt for user input
+    createChat(chatId, currentCrewId, chatTitle) // Pass the title to createChat
     setCurrentChat(chatId)
     setSearchParams(params => {
       params.set('chatId', chatId)

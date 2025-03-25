@@ -107,13 +107,20 @@ export function CrewAIChatUIRuntimeProvider({
     }
 
     const userContent = textContent.text;
-    const { addMessage } = useChatStore.getState();
+    const { addMessage, updateChatTitle, chatHistory } = useChatStore.getState();
     
     addMessage(currentChatId, {
       role: 'user',
       content: userContent,
       timestamp: Date.now(),
     });
+
+    const chat = chatHistory[currentChatId]
+
+    if (!chat.title || chat.title === "New Chat") {
+      const updatedTitle = userContent.split(" ")[0];
+      updateChatTitle(currentChatId, updatedTitle);
+    }
 
     setIsRunning(true);
     
