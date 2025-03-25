@@ -10,7 +10,6 @@ import {
 import { useChatStore } from "~/lib/store";
 import { useEffect } from "react";
 
-// Generate a random UUID for chat_id if not provided
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0;
@@ -19,7 +18,6 @@ function generateUUID() {
   });
 }
 
-// Fetch available crews from the server
 async function fetchCrews() {
   try {
     const response = await fetch('/api/crews');
@@ -40,7 +38,6 @@ const CrewAIChatUIModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
     const { currentChatId, currentCrewId, addMessage } = useChatStore.getState();
     
-    // Extract the last message which is from the user
     const lastMessage = messages[messages.length - 1] as ThreadMessage;
     const userContent = typeof lastMessage.content === 'string' 
       ? lastMessage.content 
@@ -48,17 +45,14 @@ const CrewAIChatUIModelAdapter: ChatModelAdapter = {
         ? lastMessage.content[0].text 
         : '';
     
-    // Get chat_id from store or generate a new one
     const chatId = currentChatId || generateUUID();
     
-    // Add the user message to our store
     addMessage(chatId, {
       role: lastMessage.role,
       content: userContent,
       timestamp: Date.now(),
     });
     
-    // Prepare the request payload according to our FastAPI server's expected format
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: {
@@ -76,44 +70,41 @@ const CrewAIChatUIModelAdapter: ChatModelAdapter = {
       throw new Error(`API request failed with status ${response.status}`);
     }
 
-    // Our FastAPI server returns a JSON response, not a stream
     const data = await response.json();
     
     if (data.status === "success" && data.content) {
-      // Add the assistant message to our store
       addMessage(chatId, {
         role: 'assistant',
         content: data.content,
         timestamp: Date.now(),
       });
       
-      // Return the content as a text message
       yield {
         content: [{ type: "text", text: data.content }],
       };
     } else {
-      // Handle error cases
       throw new Error(data.message || "Unknown error occurred");
     }
   },
 };
 
-// Initialize the chat when the component is mounted
 async function initializeChat() {
   try {
-    // First fetch available crews
     await fetchCrews();
     
-    const { currentChatId, currentCrewId } = useChatStore.getState();
+    const { currentChatId, currentCrewId, addMessage, createChat } = useChatStore.getState();
     
-    // Call the initialize endpoint
+    const chatId = currentChatId || generateUUID();
+    
+    createChat(chatId, currentCrewId);
+    
     const response = await fetch(`/api/initialize`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        chat_id: currentChatId,
+        chat_id: chatId,
         crew_id: currentCrewId,
       }),
     });
@@ -122,6 +113,17 @@ async function initializeChat() {
     
     if (data.status === "success") {
       console.log("Chat initialized successfully", data);
+      
+      if (data.message) {
+        addMessage(chatId, {
+          role: 'assistant',
+          content: data.message,
+          timestamp: Date.now(),
+        });
+      }
+
+      const { chatHistory } = useChatStore.getState();
+      console.log("Current chat history:", chatHistory);
     } else {
       console.error("Failed to initialize chat", data);
     }
@@ -135,16 +137,13 @@ export function CrewAIChatUIRuntimeProvider({
 }: Readonly<{
   children: ReactNode;
 }>) {
-  // Create the runtime with our adapter
   const runtime = useLocalRuntime(CrewAIChatUIModelAdapter);
   
-  // Initialize the chat when the component is mounted
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Only run in browser environment
       initializeChat();
     }
-  }, []); // Empty dependency array means this only runs once on mount
+  }, []);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
