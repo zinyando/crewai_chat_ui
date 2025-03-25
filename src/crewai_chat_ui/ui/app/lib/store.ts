@@ -46,9 +46,19 @@ export const useChatStore = create<ChatState>()(
       chatHistory: {},
       isDarkMode: false,
 
-      setCrews: (crews) => set({ crews }),
+      setCrews: (crews) => set((state) => ({ 
+        crews,
+        currentCrewId: crews.some(c => c.id === state.currentCrewId) 
+          ? state.currentCrewId 
+          : crews.length > 0 ? crews[0].id : null
+      })),
       
-      setCurrentCrew: (crewId) => set({ currentCrewId: crewId }),
+      setCurrentCrew: (crewId) => set((state) => {
+        if (crewId === null || state.crews.some(c => c.id === crewId)) {
+          return { currentCrewId: crewId }
+        }
+        return state
+      }),
       
       setCurrentChat: (chatId) => set({ currentChatId: chatId }),
       

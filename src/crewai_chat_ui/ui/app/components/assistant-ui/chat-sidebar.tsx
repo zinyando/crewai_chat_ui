@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router'
 import { Moon, Plus, Sun, Trash2 } from 'lucide-react'
 import { Button } from '~/components/ui/button'
@@ -37,6 +37,40 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
   const generateChatId = () => {
     return Math.random().toString(36).substring(2, 15)
   }
+
+  // Set initial chat when component mounts
+  useEffect(() => {
+    if (!searchParams.get('chatId')) {
+      if (Object.keys(chatHistory).length === 0) {
+        // Create a new chat if no existing chats
+        const newChatId = generateChatId()
+        createChat(newChatId, currentCrewId)
+        setCurrentChat(newChatId)
+        
+        setSearchParams(params => {
+          params.set('chatId', newChatId)
+          if (currentCrewId) {
+            params.set('crew', currentCrewId)
+          }
+          return params
+        })
+      } else {
+        const chatId = Object.keys(chatHistory)[0]
+        const chat = chatHistory[chatId]
+        
+        // Set existing first chat
+        setCurrentChat(chatId)
+        
+        setSearchParams(params => {
+          params.set('chatId', chatId)
+          if (chat.crewId) {
+            params.set('crew', chat.crewId)
+          }
+          return params
+        })
+      }
+    }
+  }, [chatHistory, currentCrewId, searchParams, setCurrentChat, setSearchParams, createChat])
 
   // Create a new chat
   const handleNewChat = () => {
@@ -115,11 +149,13 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
 
         <div className="p-4">
           <Select
-            value={currentCrewId || ''}
+            value={currentCrewId ?? ""}
             onValueChange={handleCrewChange}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select a crew" />
+              <SelectValue placeholder="Select a crew">
+                {crews.find(c => c.id === currentCrewId)?.name || "Select a crew"}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {crews.map((crew) => (
