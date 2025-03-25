@@ -3,12 +3,13 @@
 import type { ReactNode } from "react";
 import {
   AssistantRuntimeProvider,
-  useLocalRuntime,
-  type ChatModelAdapter,
-  type ThreadMessage,
+  useExternalStoreRuntime,
+  type ThreadMessageLike,
+  type AppendMessage,
+  type TextContentPart,
 } from "@assistant-ui/react";
 import { useChatStore } from "~/lib/store";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -34,60 +35,6 @@ async function fetchCrews() {
   }
 }
 
-const CrewAIChatUIModelAdapter: ChatModelAdapter = {
-  async *run({ messages, abortSignal }) {
-    const { currentChatId, currentCrewId, addMessage } = useChatStore.getState();
-    
-    const lastMessage = messages[messages.length - 1] as ThreadMessage;
-    const userContent = typeof lastMessage.content === 'string' 
-      ? lastMessage.content 
-      : lastMessage.content[0]?.type === 'text' 
-        ? lastMessage.content[0].text 
-        : '';
-    
-    const chatId = currentChatId || generateUUID();
-    
-    addMessage(chatId, {
-      role: lastMessage.role,
-      content: userContent,
-      timestamp: Date.now(),
-    });
-    
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: userContent,
-        chat_id: chatId,
-        crew_id: currentCrewId,
-      }),
-      signal: abortSignal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    if (data.status === "success" && data.content) {
-      addMessage(chatId, {
-        role: 'assistant',
-        content: data.content,
-        timestamp: Date.now(),
-      });
-      
-      yield {
-        content: [{ type: "text", text: data.content }],
-      };
-    } else {
-      throw new Error(data.message || "Unknown error occurred");
-    }
-  },
-};
-
 async function initializeChat() {
   try {
     await fetchCrews();
@@ -112,8 +59,6 @@ async function initializeChat() {
     const data = await response.json();
     
     if (data.status === "success") {
-      console.log("Chat initialized successfully", data);
-      
       if (data.message) {
         addMessage(chatId, {
           role: 'assistant',
@@ -121,9 +66,6 @@ async function initializeChat() {
           timestamp: Date.now(),
         });
       }
-
-      const { chatHistory } = useChatStore.getState();
-      console.log("Current chat history:", chatHistory);
     } else {
       console.error("Failed to initialize chat", data);
     }
@@ -132,12 +74,93 @@ async function initializeChat() {
   }
 }
 
+const convertMessage = (message: ThreadMessageLike) => {
+  const textContent = message.content[0] as TextContentPart;
+  if (!textContent || textContent.type !== "text") {
+    throw new Error("Only text messages are supported");
+  }
+  
+  return {
+    role: message.role,
+    content: textContent.text,
+    timestamp: Date.now(),
+  };
+};
+
 export function CrewAIChatUIRuntimeProvider({
   children,
 }: Readonly<{
   children: ReactNode;
 }>) {
-  const runtime = useLocalRuntime(CrewAIChatUIModelAdapter);
+  const [isRunning, setIsRunning] = useState(false);
+  const currentChatId = useChatStore((state) => state.currentChatId);
+  const currentCrewId = useChatStore((state) => state.currentCrewId);
+  const messages = useChatStore((state) => 
+    currentChatId ? state.chatHistory[currentChatId]?.messages || [] : []
+  );
+  
+  const onNew = async (message: AppendMessage) => {
+    if (!currentChatId || !currentCrewId) return;
+    const textContent = message.content[0] as TextContentPart;
+    if (!textContent || textContent.type !== "text") {
+      throw new Error("Only text messages are supported");
+    }
+
+    const userContent = textContent.text;
+    const { addMessage } = useChatStore.getState();
+    
+    addMessage(currentChatId, {
+      role: 'user',
+      content: userContent,
+      timestamp: Date.now(),
+    });
+
+    setIsRunning(true);
+    
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userContent,
+          chat_id: currentChatId,
+          crew_id: currentCrewId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.status === "success" && data.content) {
+        addMessage(currentChatId, {
+          role: 'assistant',
+          content: data.content,
+          timestamp: Date.now(),
+        });
+      } else {
+        throw new Error(data.message || "Unknown error occurred");
+      }
+    } catch (error) {
+      console.error("Error in chat:", error);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const runtime = useExternalStoreRuntime({
+    isRunning,
+    messages: messages.map(msg => ({
+      role: msg.role,
+      content: [{ type: "text" as const, text: msg.content }],
+    })),
+    convertMessage,
+    onNew,
+  });
   
   useEffect(() => {
     if (typeof window !== 'undefined') {
