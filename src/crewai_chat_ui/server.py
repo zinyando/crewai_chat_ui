@@ -6,7 +6,7 @@ from pathlib import Path
 import threading
 from typing import Dict, Optional, List
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -42,9 +42,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-static_dir = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# Get the directory containing the built React app
+ui_dir = Path(__file__).parent / "ui" / "build" / "client"
+
+# Mount the static files from the React build
+app.mount("/assets", StaticFiles(directory=str(ui_dir / "assets")), name="assets")
 
 # Global state
 chat_handler = None
@@ -63,12 +65,6 @@ class ChatMessage(BaseModel):
 class InitializeRequest(BaseModel):
     crew_id: Optional[str] = None
     chat_id: Optional[str] = None
-
-
-@app.get("/")
-async def index():
-    """Serve the main chat interface."""
-    return FileResponse(static_dir / "index.html")
 
 
 @app.post("/api/chat")
@@ -311,6 +307,20 @@ async def initialize(request: InitializeRequest = None) -> JSONResponse:
 async def get_available_crews() -> JSONResponse:
     """Get a list of all available crews."""
     return JSONResponse(content={"status": "success", "crews": discovered_crews})
+
+
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    """Serve the React application and handle client-side routing."""
+    # Check if the path points to an existing file in the build directory
+    requested_file = ui_dir / full_path
+
+    if requested_file.exists() and requested_file.is_file():
+        return FileResponse(requested_file)
+
+    # If ui/build/client/index.html exists, serve it for client-side routing
+    if ui_dir.exists() and (ui_dir / "index.html").exists():
+        return FileResponse(ui_dir / "index.html")
 
 
 def show_loading(stop_event, message):
