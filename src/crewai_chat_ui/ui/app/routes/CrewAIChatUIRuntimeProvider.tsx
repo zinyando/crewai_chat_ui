@@ -35,45 +35,6 @@ async function fetchCrews() {
   }
 }
 
-async function initializeChat() {
-  try {
-    await fetchCrews();
-    
-    const { currentChatId, currentCrewId, addMessage, createChat } = useChatStore.getState();
-    
-    const chatId = currentChatId || generateUUID();
-    
-    createChat(chatId, currentCrewId);
-    
-    const response = await fetch(`/api/initialize`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        crew_id: currentCrewId,
-      }),
-    });
-    
-    const data = await response.json();
-    
-    if (data.status === "success") {
-      if (data.message) {
-        addMessage(chatId, {
-          role: 'assistant',
-          content: data.message,
-          timestamp: Date.now(),
-        });
-      }
-    } else {
-      console.error("Failed to initialize chat", data);
-    }
-  } catch (error) {
-    console.error("Error initializing chat", error);
-  }
-}
-
 const convertMessage = (message: ThreadMessageLike) => {
   const textContent = message.content[0] as TextContentPart;
   if (!textContent || textContent.type !== "text") {
@@ -169,6 +130,48 @@ export function CrewAIChatUIRuntimeProvider({
     onNew,
   });
   
+  async function initializeChat() {
+    setIsRunning(true);
+
+    try {
+      await fetchCrews();
+      
+      const { addMessage, createChat } = useChatStore.getState();
+      const chatId = currentChatId || generateUUID();
+      
+      createChat(chatId, currentCrewId);
+      
+      const response = await fetch(`/api/initialize`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          crew_id: currentCrewId,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === "success") {
+        if (data.message) {
+          addMessage(chatId, {
+            role: 'assistant',
+            content: data.message,
+            timestamp: Date.now(),
+          });
+        }
+      } else {
+        console.error("Failed to initialize chat", data);
+      }
+    } catch (error) {
+      console.error("Error initializing chat", error);
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       initializeChat();
