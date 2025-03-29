@@ -33,15 +33,11 @@ export default function ChatLayout() {
     chatHistory,
   } = useChatStore()
 
-  // Sync URL params with store state
   useEffect(() => {
     if (chatId && chatId !== currentChatId) {
       if (chatHistory[chatId]) {
         setCurrentChat(chatId)
-        // Store chat ID in localStorage for the runtime
-        localStorage.setItem('crewai_chat_id', chatId)
       } else {
-        // Chat doesn't exist, redirect to home
         navigate('/')
       }
     }
@@ -50,18 +46,8 @@ export default function ChatLayout() {
   useEffect(() => {
     if (crewId !== currentCrewId) {
       setCurrentCrew(crewId)
-      // Store crew ID in localStorage for the runtime
-      if (crewId) {
-        localStorage.setItem('crewai_crew_id', crewId)
-      } else {
-        localStorage.removeItem('crewai_crew_id')
-      }
     }
   }, [crewId, currentCrewId, setCurrentCrew])
-
-  // if (!currentChatId) {
-  //   return <LoadingFallback />
-  // }
 
   return (
     <CrewAIChatUIRuntimeProvider>
