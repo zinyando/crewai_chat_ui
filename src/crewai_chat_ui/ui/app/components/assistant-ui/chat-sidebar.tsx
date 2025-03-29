@@ -33,16 +33,13 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     toggleDarkMode,
   } = useChatStore()
 
-  // Generate a new chat ID
   const generateChatId = () => {
     return Math.random().toString(36).substring(2, 15)
   }
 
-  // Set initial chat when component mounts
   useEffect(() => {
     if (!searchParams.get('chatId')) {
       if (Object.keys(chatHistory).length === 0) {
-        // Create a new chat if no existing chats
         const newChatId = generateChatId()
         createChat(newChatId, currentCrewId)
         setCurrentChat(newChatId)
@@ -58,7 +55,6 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
         const chatId = Object.keys(chatHistory)[0]
         const chat = chatHistory[chatId]
         
-        // Set existing first chat
         setCurrentChat(chatId)
         
         setSearchParams(params => {
@@ -72,11 +68,10 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     }
   }, [chatHistory, currentCrewId, searchParams, setCurrentChat, setSearchParams, createChat])
 
-  // Create a new chat
   const handleNewChat = () => {
     const chatId = generateChatId()
-    const chatTitle = "New Chat" // Set a default title or prompt for user input
-    createChat(chatId, currentCrewId, chatTitle) // Pass the title to createChat
+    const chatTitle = "New Chat"
+    createChat(chatId, currentCrewId, chatTitle)
     setCurrentChat(chatId)
     setSearchParams(params => {
       params.set('chatId', chatId)
@@ -87,7 +82,6 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     })
   }
 
-  // Handle crew selection
   const handleCrewChange = (crewId: string) => {
     setCurrentCrew(crewId)
     setSearchParams(params => {
@@ -96,7 +90,6 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     })
   }
 
-  // Handle chat selection
   const handleChatSelect = (chatId: string) => {
     setCurrentChat(chatId)
     const chat = chatHistory[chatId]
@@ -109,7 +102,6 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     })
   }
 
-  // Handle chat deletion
   const handleDeleteChat = (chatId: string) => {
     setChatToDelete(chatId)
   }
@@ -128,7 +120,6 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     }
   }
 
-  // Sort chats by last updated
   const sortedChats = Object.values(chatHistory).sort(
     (a, b) => b.lastUpdated - a.lastUpdated
   )

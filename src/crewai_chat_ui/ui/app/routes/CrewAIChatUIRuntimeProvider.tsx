@@ -11,19 +11,15 @@ import {
 import { useChatStore } from "~/lib/store";
 import { useEffect, useState } from "react";
 
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+const generateChatId = () => {
+  return Math.random().toString(36).substring(2, 15);
+};
 
 async function fetchCrews() {
   try {
-    const response = await fetch('/api/crews');
+    const response = await fetch("/api/crews");
     const data = await response.json();
-    
+
     if (data.status === "success" && Array.isArray(data.crews)) {
       // Update the store with available crews
       useChatStore.getState().setCrews(data.crews);
@@ -40,7 +36,7 @@ const convertMessage = (message: ThreadMessageLike) => {
   if (!textContent || textContent.type !== "text") {
     throw new Error("Only text messages are supported");
   }
-  
+
   return {
     role: message.role,
     content: textContent.text,
@@ -56,10 +52,10 @@ export function CrewAIChatUIRuntimeProvider({
   const [isRunning, setIsRunning] = useState(false);
   const currentChatId = useChatStore((state) => state.currentChatId);
   const currentCrewId = useChatStore((state) => state.currentCrewId);
-  const messages = useChatStore((state) => 
+  const messages = useChatStore((state) =>
     currentChatId ? state.chatHistory[currentChatId]?.messages || [] : []
   );
-  
+
   const onNew = async (message: AppendMessage) => {
     if (!currentChatId || !currentCrewId) return;
     const textContent = message.content[0] as TextContentPart;
@@ -68,15 +64,16 @@ export function CrewAIChatUIRuntimeProvider({
     }
 
     const userContent = textContent.text;
-    const { addMessage, updateChatTitle, chatHistory } = useChatStore.getState();
-    
+    const { addMessage, updateChatTitle, chatHistory } =
+      useChatStore.getState();
+
     addMessage(currentChatId, {
-      role: 'user',
+      role: "user",
       content: userContent,
       timestamp: Date.now(),
     });
 
-    const chat = chatHistory[currentChatId]
+    const chat = chatHistory[currentChatId];
 
     if (!chat.title || chat.title === "New Chat") {
       const updatedTitle = userContent.split(" ")[0];
@@ -84,7 +81,7 @@ export function CrewAIChatUIRuntimeProvider({
     }
 
     setIsRunning(true);
-    
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -103,10 +100,10 @@ export function CrewAIChatUIRuntimeProvider({
       }
 
       const data = await response.json();
-      
+
       if (data.status === "success" && data.content) {
         addMessage(currentChatId, {
-          role: 'assistant',
+          role: "assistant",
           content: data.content,
           timestamp: Date.now(),
         });
@@ -122,25 +119,33 @@ export function CrewAIChatUIRuntimeProvider({
 
   const runtime = useExternalStoreRuntime({
     isRunning,
-    messages: messages.map(msg => ({
+    messages: messages.map((msg) => ({
       role: msg.role,
       content: [{ type: "text" as const, text: msg.content }],
     })),
     convertMessage,
     onNew,
   });
-  
+
   async function initializeChat() {
     setIsRunning(true);
 
     try {
       await fetchCrews();
-      
-      const { addMessage, createChat } = useChatStore.getState();
-      const chatId = currentChatId || generateUUID();
-      
+
+      const { addMessage, createChat, currentChatId, currentCrewId } =
+        useChatStore.getState();
+      const chatId = currentChatId || generateChatId();
+
+      console.log(
+        `initializeChat currentChatId: ${useChatStore.getState().currentChatId}`
+      );
+      console.log(
+        `initializeChat currentCrewId: ${useChatStore.getState().currentCrewId}`
+      );
+
       createChat(chatId, currentCrewId);
-      
+
       const response = await fetch(`/api/initialize`, {
         method: "POST",
         headers: {
@@ -151,13 +156,13 @@ export function CrewAIChatUIRuntimeProvider({
           crew_id: currentCrewId,
         }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.status === "success") {
         if (data.message) {
           addMessage(chatId, {
-            role: 'assistant',
+            role: "assistant",
             content: data.message,
             timestamp: Date.now(),
           });
@@ -173,7 +178,8 @@ export function CrewAIChatUIRuntimeProvider({
   }
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
+      console.log("Initializing chat...");
       initializeChat();
     }
   }, []);
