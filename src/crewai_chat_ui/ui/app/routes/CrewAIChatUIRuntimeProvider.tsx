@@ -117,6 +117,66 @@ export function CrewAIChatUIRuntimeProvider({
     }
   };
 
+  async function initializeChat() {
+    setIsRunning(true);
+
+    try {
+      await fetchCrews();
+
+      const { addMessage, createChat, currentChatId, currentCrewId, crews, setCurrentCrew } =
+        useChatStore.getState();
+
+      // Set initial crew if none is selected and crews are available
+      if (!currentCrewId && crews.length > 0) {
+        const initialCrew = crews[0];
+        setCurrentCrew(initialCrew.id);
+      }
+
+      const chatId = currentChatId || generateChatId();
+      const activeCrewId = useChatStore.getState().currentCrewId;
+
+      console.log(
+        `initializeChat currentChatId: ${chatId}`
+      );
+      console.log(
+        `initializeChat currentCrewId: ${activeCrewId}`
+      );
+
+      createChat(chatId, activeCrewId);
+
+      if (activeCrewId) {
+        const response = await fetch(`/api/initialize`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            crew_id: activeCrewId,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.status === "success") {
+          if (data.message) {
+            addMessage(chatId, {
+              role: "assistant",
+              content: data.message,
+              timestamp: Date.now(),
+            });
+          }
+        } else {
+          console.error("Failed to initialize chat", data);
+        }
+      }
+    } catch (error) {
+      console.error("Error initializing chat", error);
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
   const runtime = useExternalStoreRuntime({
     isRunning,
     messages: messages.map((msg) => ({
@@ -126,56 +186,6 @@ export function CrewAIChatUIRuntimeProvider({
     convertMessage,
     onNew,
   });
-
-  async function initializeChat() {
-    setIsRunning(true);
-
-    try {
-      await fetchCrews();
-
-      const { addMessage, createChat, currentChatId, currentCrewId } =
-        useChatStore.getState();
-      const chatId = currentChatId || generateChatId();
-
-      console.log(
-        `initializeChat currentChatId: ${useChatStore.getState().currentChatId}`
-      );
-      console.log(
-        `initializeChat currentCrewId: ${useChatStore.getState().currentCrewId}`
-      );
-
-      createChat(chatId, currentCrewId);
-
-      const response = await fetch(`/api/initialize`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chat_id: chatId,
-          crew_id: currentCrewId,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.status === "success") {
-        if (data.message) {
-          addMessage(chatId, {
-            role: "assistant",
-            content: data.message,
-            timestamp: Date.now(),
-          });
-        }
-      } else {
-        console.error("Failed to initialize chat", data);
-      }
-    } catch (error) {
-      console.error("Error initializing chat", error);
-    } finally {
-      setIsRunning(false);
-    }
-  }
 
   useEffect(() => {
     if (typeof window !== "undefined") {
