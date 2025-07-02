@@ -23,6 +23,24 @@ logging.basicConfig(
 log = logging.getLogger("werkzeug")
 log.setLevel(logging.ERROR)
 
+# Load environment variables from a .env file if present
+try:
+    from dotenv import load_dotenv, find_dotenv
+
+    env_path = find_dotenv(usecwd=True)
+    if env_path:
+        load_dotenv(env_path, override=False)
+        logging.getLogger(__name__).info(
+            "Environment variables loaded from %s", env_path
+        )
+    else:
+        logging.getLogger(__name__).warning(
+            "No .env file found when initialising server"
+        )
+except ImportError:
+    # python-dotenv not installed; proceed without loading
+    pass
+
 from crewai_chat_ui.crew_loader import (
     load_crew,
     load_crew_from_module,
