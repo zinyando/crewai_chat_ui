@@ -10,11 +10,11 @@ description = "Web UI for CrewAI chat functionality"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "crewai>=0.105.0",
-  "click>=8.0.0",
-  "fastapi>=0.109.0",
-  "uvicorn>=0.27.0",
-  "pydantic>=2.0.0",
+  "crewai>=0.134.0",
+  "click>=8.2.1",
+  "fastapi>=0.115.14",
+  "uvicorn>=0.35.0",
+  "pydantic>=2.11.7",
 ]
 
 [project.scripts]
