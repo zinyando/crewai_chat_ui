@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { ThreadPrimitive, ComposerPrimitive, MessagePrimitive } from '@assistant-ui/react'
 import { ChatSidebar } from '~/components/assistant-ui/chat-sidebar'
 import { useChatStore } from '~/lib/store'
 import { CrewAIChatUIRuntimeProvider } from './CrewAIChatUIRuntimeProvider'
-import { Thread } from "~/components/assistant-ui/thread";
+import { Thread } from "~/components/assistant-ui/thread"
+import { Button } from '~/components/ui/button'
+import { ArrowLeft, Moon, Sun } from 'lucide-react'
 
 // Loading fallback component
 function LoadingFallback() {
@@ -15,8 +16,12 @@ function LoadingFallback() {
   )
 }
 
-export function HydrateFallback() {
-  return <LoadingFallback />
+
+export function meta() {
+  return [
+    { title: "CrewAI - Chat Mode" },
+    { name: "description", content: "Chat with CrewAI" },
+  ];
 }
 
 export default function ChatLayout() {
@@ -31,6 +36,8 @@ export default function ChatLayout() {
     setCurrentChat,
     setCurrentCrew,
     chatHistory,
+    isDarkMode,
+    toggleDarkMode
   } = useChatStore()
 
   // Sync URL params with store state
@@ -63,13 +70,42 @@ export default function ChatLayout() {
   //   return <LoadingFallback />
   // }
 
+  const handleBack = () => {
+    navigate('/');
+  };
+
   return (
     <CrewAIChatUIRuntimeProvider>
-      <div className="flex h-screen">
-        <ChatSidebar />
-        <main className="flex-1 overflow-hidden">
-          <Thread />
-        </main>
+      <div className="flex h-screen flex-col">
+        <header className="py-4 px-6 border-b bg-background">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleBack}
+                className="mr-4"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <h1 className="text-2xl font-bold">Chat Mode</h1>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDarkMode}
+              className="h-8 w-8"
+            >
+              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+          </div>
+        </header>
+        <div className="flex flex-1 overflow-hidden">
+          <ChatSidebar />
+          <main className="flex-1 overflow-hidden">
+            <Thread />
+          </main>
+        </div>
       </div>
     </CrewAIChatUIRuntimeProvider>
   )
