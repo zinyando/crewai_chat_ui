@@ -45,7 +45,7 @@ export default function Landing() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
       <header className="py-6 px-8 border-b">
         <div className="container mx-auto flex justify-between items-center">
@@ -69,7 +69,7 @@ export default function Landing() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
             {/* Chat Mode Card */}
-            <div className={`rounded-xl p-8 shadow-lg transition-all hover:shadow-xl ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 mx-auto">
                 <MessageSquare className="h-8 w-8 text-primary" />
               </div>
@@ -89,7 +89,7 @@ export default function Landing() {
             </div>
 
             {/* Kickoff Mode Card */}
-            <div className={`rounded-xl p-8 shadow-lg transition-all hover:shadow-xl ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 mx-auto">
                 <Zap className="h-8 w-8 text-primary" />
               </div>
@@ -112,9 +112,9 @@ export default function Landing() {
       </main>
 
       {/* Footer */}
-      <footer className={`py-6 px-8 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+      <footer className="py-6 px-8 border-t">
         <div className="container mx-auto text-center">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             CrewAI Chat UI - Powered by CrewAI
           </p>
         </div>
