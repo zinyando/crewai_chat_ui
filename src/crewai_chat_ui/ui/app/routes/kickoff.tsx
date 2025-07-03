@@ -14,6 +14,7 @@ import {
 import { useChatStore } from '~/lib/store';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert';
+import ReactMarkdown from 'react-markdown';
 
 export function meta() {
   return [
@@ -152,7 +153,16 @@ export default function Kickoff() {
       const data = await response.json();
       
       if (data.status === 'success') {
-        setResult(data.result);
+        // Handle nested result structure
+        if (data.result && typeof data.result === 'object') {
+          if (data.result.status === 'success') {
+            setResult(data.result.result);
+          } else {
+            setError(data.result.detail || 'Failed to run crew');
+          }
+        } else {
+          setResult(data.result);
+        }
       } else {
         setError(data.detail || 'Failed to run crew');
       }
@@ -292,8 +302,31 @@ export default function Kickoff() {
             {result && (
               <div className="mt-8">
                 <h3 className="text-xl font-bold mb-4">Result</h3>
-                <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                  <pre className="whitespace-pre-wrap">{result}</pre>
+                <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-gray-800' : 'bg-white'} overflow-auto`}>
+                  <div className="text-base leading-7 max-w-none">
+                    <ReactMarkdown 
+                      components={{
+                        h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-4" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-5 mb-3" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-lg font-bold mt-4 mb-2" {...props} />,
+                        p: ({node, ...props}) => <p className="mb-4" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-4" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal pl-6 mb-4" {...props} />,
+                        li: ({node, ...props}) => <li className="mb-1" {...props} />,
+                        a: ({node, ...props}) => <a className="text-blue-500 hover:underline" {...props} />,
+                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-700 pl-4 italic my-4" {...props} />,
+                        code: ({node, children, className, ...props}: any) => {
+                          const match = /language-(\w+)/.exec(className || '');
+                          const isInline = !match && !children?.toString().includes('\n');
+                          return isInline
+                            ? <code className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded" {...props}>{children}</code>
+                            : <code className="block bg-gray-100 dark:bg-gray-800 p-2 rounded my-4 overflow-x-auto" {...props}>{children}</code>
+                        }
+                      }}
+                    >
+                      {result}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               </div>
             )}
