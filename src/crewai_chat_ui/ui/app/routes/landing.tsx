@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { useChatStore } from '~/lib/store';
-import { MessageSquare, Zap } from 'lucide-react';
+import { MessageSquare, Zap, Moon, Sun } from 'lucide-react';
 
 export function meta() {
   return [
@@ -13,7 +13,7 @@ export function meta() {
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { crews, setCrews, isDarkMode } = useChatStore();
+  const { crews, setCrews, isDarkMode, toggleDarkMode } = useChatStore();
   const [loading, setLoading] = useState(true);
 
   // Fetch available crews on component mount
@@ -47,9 +47,17 @@ export default function Landing() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
-      <header className="py-6 px-8 border-b">
-        <div className="container mx-auto flex justify-between items-center">
+      <header className="py-4 px-6 border-b bg-background">
+        <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">CrewAI</h1>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleDarkMode}
+            className="h-8 w-8"
+          >
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
         </div>
       </header>
 

@@ -149,16 +149,8 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
   return (
     <>
       <aside className="flex h-full w-64 flex-col bg-background border-r">
-        <div className="flex items-center justify-between p-4">
+        <div className="p-4">
           <h2 className="text-lg font-semibold">Chats</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleDarkMode}
-            className="h-8 w-8"
-          >
-            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
         </div>
 
         <div className="p-4">
