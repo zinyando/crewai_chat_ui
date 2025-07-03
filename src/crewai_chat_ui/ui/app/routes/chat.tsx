@@ -75,7 +75,7 @@ export default function ChatLayout() {
   return (
     <CrewAIChatUIRuntimeProvider>
       <div className="flex h-screen flex-col">
-        <header className="py-2 px-4 border-b flex items-center">
+        <header className="py-2 px-4 border-b flex items-center bg-background">
           <Button 
             variant="ghost" 
             size="icon" 
