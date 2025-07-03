@@ -20,6 +20,13 @@ export interface Crew {
   id: string
   name: string
   description: string
+  path?: string
+}
+
+export interface InputField {
+  name: string
+  description: string
+  value: string
 }
 
 interface ChatState {

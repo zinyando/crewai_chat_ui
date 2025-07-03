@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { ThreadPrimitive, ComposerPrimitive, MessagePrimitive } from '@assistant-ui/react'
 import { ChatSidebar } from '~/components/assistant-ui/chat-sidebar'
 import { useChatStore } from '~/lib/store'
 import { CrewAIChatUIRuntimeProvider } from './CrewAIChatUIRuntimeProvider'
-import { Thread } from "~/components/assistant-ui/thread";
+import { Thread } from "~/components/assistant-ui/thread"
+import { Button } from '~/components/ui/button'
+import { ArrowLeft } from 'lucide-react'
 
 // Loading fallback component
 function LoadingFallback() {
@@ -17,6 +18,13 @@ function LoadingFallback() {
 
 export function HydrateFallback() {
   return <LoadingFallback />
+}
+
+export function meta() {
+  return [
+    { title: "CrewAI - Chat Mode" },
+    { name: "description", content: "Chat with CrewAI" },
+  ];
 }
 
 export default function ChatLayout() {
@@ -63,13 +71,30 @@ export default function ChatLayout() {
   //   return <LoadingFallback />
   // }
 
+  const handleBack = () => {
+    navigate('/');
+  };
+
   return (
     <CrewAIChatUIRuntimeProvider>
-      <div className="flex h-screen">
-        <ChatSidebar />
-        <main className="flex-1 overflow-hidden">
-          <Thread />
-        </main>
+      <div className="flex h-screen flex-col">
+        <header className="py-2 px-4 border-b flex items-center">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleBack}
+            className="mr-2"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-lg font-semibold">Chat Mode</h1>
+        </header>
+        <div className="flex flex-1 overflow-hidden">
+          <ChatSidebar />
+          <main className="flex-1 overflow-hidden">
+            <Thread />
+          </main>
+        </div>
       </div>
     </CrewAIChatUIRuntimeProvider>
   )
