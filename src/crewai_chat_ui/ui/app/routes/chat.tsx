@@ -16,9 +16,6 @@ function LoadingFallback() {
   )
 }
 
-export function HydrateFallback() {
-  return <LoadingFallback />
-}
 
 export function meta() {
   return [
