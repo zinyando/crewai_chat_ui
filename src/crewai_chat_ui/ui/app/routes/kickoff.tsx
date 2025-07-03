@@ -182,11 +182,7 @@ export default function Kickoff() {
   };
 
   return (
-    <div
-      className={`min-h-screen flex flex-col ${
-        isDarkMode ? "dark bg-gray-900 text-white" : "bg-gray-50 text-gray-900"
-      }`}
-    >
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
       <header className="py-4 px-6 border-b">
         <div className="flex items-center">
@@ -205,11 +201,7 @@ export default function Kickoff() {
       {/* Main Layout with Sidebar and Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside
-          className={`w-80 border-r flex-shrink-0 overflow-y-auto p-4 ${
-            isDarkMode ? "bg-gray-800" : "bg-white"
-          }`}
-        >
+        <aside className="w-80 border-r flex-shrink-0 overflow-y-auto p-4 bg-background">
           <div className="sticky top-0 space-y-6">
             <div className="space-y-2">
               <h3 className="text-lg font-semibold">Select a Crew</h3>
@@ -232,15 +224,11 @@ export default function Kickoff() {
             </div>
 
             {crewDetails && (
-              <div
-                className={`p-4 rounded-lg border ${
-                  isDarkMode ? "bg-gray-700" : "bg-gray-50"
-                }`}
-              >
+              <div className="p-4 rounded-lg border bg-accent/50">
                 <h3 className="text-lg font-semibold mb-2">
                   {crewDetails.name}
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {crewDetails.description}
                 </p>
               </div>
@@ -306,7 +294,7 @@ export default function Kickoff() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6 bg-background">
           {error && (
             <Alert variant="destructive" className="mb-6">
               <AlertTitle>Error</AlertTitle>
@@ -318,7 +306,7 @@ export default function Kickoff() {
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-md">
                 <h2 className="text-2xl font-bold mb-2">Run a Crew Directly</h2>
-                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                <p className="text-muted-foreground mb-4">
                   Select a crew from the sidebar, provide the required inputs,
                   and run it to see results here.
                 </p>
@@ -334,11 +322,7 @@ export default function Kickoff() {
           {result && (
             <div className="max-w-4xl mx-auto">
               <h2 className="text-2xl font-bold mb-6">Result</h2>
-              <div
-                className={`p-6 rounded-lg border ${
-                  isDarkMode ? "bg-gray-800" : "bg-white"
-                } overflow-auto`}
-              >
+              <div className="p-6 rounded-lg border bg-card overflow-auto">
                 <div className="text-base leading-7">
                   <ReactMarkdown
                     components={{
@@ -380,7 +364,7 @@ export default function Kickoff() {
                       ),
                       blockquote: ({ node, ...props }) => (
                         <blockquote
-                          className="border-l-4 border-gray-300 dark:border-gray-700 pl-4 italic my-4"
+                          className="border-l-4 border-muted pl-4 italic my-4"
                           {...props}
                         />
                       ),
@@ -390,14 +374,14 @@ export default function Kickoff() {
                           !match && !children?.toString().includes("\n");
                         return isInline ? (
                           <code
-                            className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded"
+                            className="bg-muted px-1 py-0.5 rounded"
                             {...props}
                           >
                             {children}
                           </code>
                         ) : (
                           <code
-                            className="block bg-gray-100 dark:bg-gray-800 p-2 rounded my-4 overflow-x-auto"
+                            className="block bg-muted p-2 rounded my-4 overflow-x-auto"
                             {...props}
                           >
                             {children}
