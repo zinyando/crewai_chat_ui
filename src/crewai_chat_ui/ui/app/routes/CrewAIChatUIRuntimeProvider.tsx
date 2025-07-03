@@ -10,6 +10,7 @@ import {
 } from "@assistant-ui/react";
 import { useChatStore } from "~/lib/store";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -53,9 +54,11 @@ export function CrewAIChatUIRuntimeProvider({
 }: Readonly<{
   children: ReactNode;
 }>) {
+  const navigate = useNavigate();
   const [isRunning, setIsRunning] = useState(false);
   const currentChatId = useChatStore((state) => state.currentChatId);
   const currentCrewId = useChatStore((state) => state.currentCrewId);
+  const chatHistory = useChatStore((state) => state.chatHistory);
   const messages = useChatStore((state) => 
     currentChatId ? state.chatHistory[currentChatId]?.messages || [] : []
   );
@@ -136,34 +139,61 @@ export function CrewAIChatUIRuntimeProvider({
     try {
       await fetchCrews();
       
-      const { addMessage, createChat } = useChatStore.getState();
-      const chatId = currentChatId || generateUUID();
+      const { addMessage, createChat, setCurrentChat } = useChatStore.getState();
       
-      createChat(chatId, currentCrewId);
+      // Check if we have a stored chat ID in localStorage
+      const storedChatId = localStorage.getItem('crewai_chat_id');
+      const storedCrewId = localStorage.getItem('crewai_crew_id');
       
-      const response = await fetch(`/api/initialize`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chat_id: chatId,
-          crew_id: currentCrewId,
-        }),
-      });
+      // Determine which chat ID to use
+      let chatId;
       
-      const data = await response.json();
-      
-      if (data.status === "success") {
-        if (data.message) {
-          addMessage(chatId, {
-            role: 'assistant',
-            content: data.message,
-            timestamp: Date.now(),
-          });
+      // If we have a stored chat ID and it exists in our chat history
+      if (storedChatId && chatHistory[storedChatId]) {
+        chatId = storedChatId;
+        setCurrentChat(chatId);
+        
+        // Update URL if needed
+        if (window.location.pathname.includes('/chat/')) {
+          navigate(`/chat/${chatId}?crew=${storedCrewId || ''}`);
         }
       } else {
-        console.error("Failed to initialize chat", data);
+        // Otherwise use current chat ID or generate a new one
+        chatId = currentChatId || generateUUID();
+        createChat(chatId, currentCrewId);
+        setCurrentChat(chatId);
+        
+        // Store the new chat ID
+        localStorage.setItem('crewai_chat_id', chatId);
+        if (currentCrewId) {
+          localStorage.setItem('crewai_crew_id', currentCrewId);
+        }
+        
+        // Only initialize with API if it's a new chat
+        const response = await fetch(`/api/initialize`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            crew_id: currentCrewId,
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === "success") {
+          if (data.message) {
+            addMessage(chatId, {
+              role: 'assistant',
+              content: data.message,
+              timestamp: Date.now(),
+            });
+          }
+        } else {
+          console.error("Failed to initialize chat", data);
+        }
       }
     } catch (error) {
       console.error("Error initializing chat", error);
@@ -177,6 +207,17 @@ export function CrewAIChatUIRuntimeProvider({
       initializeChat();
     }
   }, []);
+  
+  // Effect to update localStorage when current chat or crew changes
+  useEffect(() => {
+    if (currentChatId) {
+      localStorage.setItem('crewai_chat_id', currentChatId);
+    }
+    
+    if (currentCrewId) {
+      localStorage.setItem('crewai_crew_id', currentCrewId);
+    }
+  }, [currentChatId, currentCrewId]);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
