@@ -47,7 +47,7 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       crews: [],
       currentCrewId: null,
       currentChatId: null,
@@ -89,8 +89,15 @@ export const useChatStore = create<ChatState>()(
 
       createChat: (chatId, crewId, title = 'New Chat') =>
         set((state) => {
+          // Check if chat already exists to avoid overwriting
+          if (state.chatHistory[chatId]) {
+            return state;
+          }
+          
           const crew = state.crews.find((c) => c.id === crewId)
           return {
+            currentChatId: chatId,
+            currentCrewId: crewId || state.currentCrewId,
             chatHistory: {
               ...state.chatHistory,
               [chatId]: {
@@ -132,6 +139,33 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'chat-storage',
+      // Customize storage options
+      storage: {
+        getItem: (name) => {
+          const value = localStorage.getItem(name);
+          if (value === null) return null;
+          try {
+            return JSON.parse(value);
+          } catch (e) {
+            console.error('Error parsing stored data:', e);
+            return null;
+          }
+        },
+        setItem: (name, value) => {
+          try {
+            localStorage.setItem(name, JSON.stringify(value));
+          } catch (e) {
+            console.error('Error storing data:', e);
+          }
+        },
+        removeItem: (name) => localStorage.removeItem(name),
+      },
+      // Only persist specific parts of the state
+      partialize: (state) => {
+        // Return a partial state that includes only what we want to persist
+        // TypeScript requires we return the full state type, so we need to include all properties
+        return state;
+      },
     }
   )
 ) 

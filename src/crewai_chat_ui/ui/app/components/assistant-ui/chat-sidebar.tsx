@@ -53,37 +53,93 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
         .catch(error => console.error('Error fetching crews:', error));
     }
     
-    if (!searchParams.get('chatId')) {
-      if (Object.keys(chatHistory).length === 0) {
-        // Create a new chat if no existing chats
-        const newChatId = generateChatId()
-        createChat(newChatId, currentCrewId)
-        setCurrentChat(newChatId)
+    // Check if we have a chat ID in the URL
+    const chatIdFromUrl = searchParams.get('chatId');
+    const crewIdFromUrl = searchParams.get('crew');
+    
+    // Check if we have a stored chat ID in localStorage
+    const storedChatId = localStorage.getItem('crewai_chat_id');
+    const storedCrewId = localStorage.getItem('crewai_crew_id');
+    
+    if (!chatIdFromUrl) {
+      // No chat ID in URL, check localStorage and chat history
+      if (storedChatId && chatHistory[storedChatId]) {
+        // We have a stored chat ID that exists in history
+        setCurrentChat(storedChatId);
+        if (storedCrewId) {
+          setCurrentCrew(storedCrewId);
+        }
         
+        // Update URL params
         setSearchParams(params => {
-          params.set('chatId', newChatId)
-          if (currentCrewId) {
-            params.set('crew', currentCrewId)
+          params.set('chatId', storedChatId);
+          if (storedCrewId) {
+            params.set('crew', storedCrewId);
           }
-          return params
-        })
+          return params;
+        });
+      } else if (Object.keys(chatHistory).length > 0) {
+        // No stored chat ID or it doesn't exist, but we have chats in history
+        // Use the most recent chat
+        const sortedChats = Object.values(chatHistory).sort(
+          (a, b) => b.lastUpdated - a.lastUpdated
+        );
+        const mostRecentChat = sortedChats[0];
+        
+        setCurrentChat(mostRecentChat.id);
+        if (mostRecentChat.crewId) {
+          setCurrentCrew(mostRecentChat.crewId);
+        }
+        
+        // Update localStorage
+        localStorage.setItem('crewai_chat_id', mostRecentChat.id);
+        if (mostRecentChat.crewId) {
+          localStorage.setItem('crewai_crew_id', mostRecentChat.crewId);
+        }
+        
+        // Update URL params
+        setSearchParams(params => {
+          params.set('chatId', mostRecentChat.id);
+          if (mostRecentChat.crewId) {
+            params.set('crew', mostRecentChat.crewId);
+          }
+          return params;
+        });
       } else {
-        const chatId = Object.keys(chatHistory)[0]
-        const chat = chatHistory[chatId]
+        // No chats in history, create a new one
+        const newChatId = generateChatId();
+        createChat(newChatId, currentCrewId);
+        setCurrentChat(newChatId);
         
-        // Set existing first chat
-        setCurrentChat(chatId)
+        // Update localStorage
+        localStorage.setItem('crewai_chat_id', newChatId);
+        if (currentCrewId) {
+          localStorage.setItem('crewai_crew_id', currentCrewId);
+        }
         
+        // Update URL params
         setSearchParams(params => {
-          params.set('chatId', chatId)
-          if (chat.crewId) {
-            params.set('crew', chat.crewId)
+          params.set('chatId', newChatId);
+          if (currentCrewId) {
+            params.set('crew', currentCrewId);
           }
-          return params
-        })
+          return params;
+        });
+      }
+    } else if (chatHistory[chatIdFromUrl]) {
+      // Chat ID from URL exists in history, use it
+      setCurrentChat(chatIdFromUrl);
+      
+      // Update localStorage
+      localStorage.setItem('crewai_chat_id', chatIdFromUrl);
+      
+      // Handle crew ID if present
+      if (crewIdFromUrl) {
+        setCurrentCrew(crewIdFromUrl);
+        localStorage.setItem('crewai_crew_id', crewIdFromUrl);
       }
     }
-  }, [chatHistory, currentCrewId, searchParams, setCurrentChat, setSearchParams, createChat, crews.length, setCrews])
+  }, [chatHistory, currentCrewId, searchParams, setCurrentChat, setSearchParams, createChat, crews.length, setCrews, setCurrentCrew])
 
   // Create a new chat
   const handleNewChat = () => {
@@ -113,6 +169,13 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
   const handleChatSelect = (chatId: string) => {
     setCurrentChat(chatId)
     const chat = chatHistory[chatId]
+    
+    // Update localStorage with selected chat
+    localStorage.setItem('crewai_chat_id', chatId);
+    if (chat.crewId) {
+      localStorage.setItem('crewai_crew_id', chat.crewId);
+    }
+    
     setSearchParams(params => {
       params.set('chatId', chatId)
       if (chat.crewId) {
