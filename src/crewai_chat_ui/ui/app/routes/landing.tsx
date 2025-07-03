@@ -119,7 +119,15 @@ export default function Landing() {
       <footer className="py-6 px-8 border-t">
         <div className="container mx-auto text-center">
           <p className="text-sm text-muted-foreground">
-            CrewAI Chat UI - Powered by CrewAI
+            CrewAI Chat UI - Created by{" "}
+            <a
+              href="https://github.com/zinyando"
+              className="text-primary hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              @zinyando
+            </a>
           </p>
         </div>
       </footer>
