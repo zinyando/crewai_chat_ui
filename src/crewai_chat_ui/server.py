@@ -7,9 +7,9 @@ import threading
 from typing import Dict, Optional, List
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import uvicorn
 import click
 import socket
@@ -83,6 +83,10 @@ class ChatMessage(BaseModel):
 class InitializeRequest(BaseModel):
     crew_id: Optional[str] = None
     chat_id: Optional[str] = None
+
+
+class KickoffRequest(BaseModel):
+    inputs: Optional[Dict[str, str]] = None
 
 
 @app.post("/api/chat")
@@ -325,6 +329,61 @@ async def initialize(request: InitializeRequest = None) -> JSONResponse:
 async def get_available_crews() -> JSONResponse:
     """Get a list of all available crews."""
     return JSONResponse(content={"status": "success", "crews": discovered_crews})
+
+
+@app.post("/api/crews/{crew_id}/kickoff")
+async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
+    """Run a specific crew directly with optional inputs.
+    
+    Args:
+        crew_id: The ID of the crew to run
+        request: Optional inputs for the crew
+        
+    Returns:
+        JSONResponse with the crew run results
+    """
+    try:
+        # Find the crew path from the discovered crews
+        crew_path = None
+        for crew in discovered_crews:
+            if crew.get("id") == crew_id:
+                crew_path = crew.get("path")
+                break
+
+        if not crew_path:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Crew with ID {crew_id} not found",
+            )
+
+        # Load the crew
+        crew_instance, crew_name = load_crew_from_module(Path(crew_path))
+        
+        # Create a handler for this crew if it doesn't exist
+        if crew_id not in chat_handlers:
+            chat_handlers[crew_id] = ChatHandler(crew_instance, crew_name)
+        
+        handler = chat_handlers[crew_id]
+        
+        # Run the crew directly
+        inputs = request.inputs or {}
+        
+        # Create a thread to run the crew
+        result = handler.run_crew(inputs)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "crew_id": crew_id,
+            "crew_name": crew_name,
+            "result": result
+        })
+    except HTTPException as e:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        error_message = f"Error running crew: {str(e)}"
+        logging.error(error_message, exc_info=True)
+        raise HTTPException(status_code=500, detail=error_message)
 
 
 @app.get("/{full_path:path}")

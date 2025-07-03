@@ -187,6 +187,72 @@ class ChatHandler:
         def run_crew_tool_with_messages(**kwargs):
             return run_crew_tool(self.crew, self.messages, **kwargs)
         return run_crew_tool_with_messages
+        
+    def run_crew(self, inputs: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        """Run the crew directly with the provided inputs.
+        
+        This method allows running the crew without going through the chat interface.
+        It's useful for API calls that need to run the crew programmatically.
+        
+        Args:
+            inputs: Dictionary of input values for the crew
+            
+        Returns:
+            Dictionary containing the crew execution results
+        """
+        if not self.is_initialized:
+            self.initialize()
+            
+        # Start loading indicator in a separate thread
+        loading_complete = threading.Event()
+        loading_thread = threading.Thread(target=self._show_loading, args=(loading_complete,))
+        loading_thread.daemon = True
+        loading_thread.start()
+        
+        try:
+            # Ensure we have the crew tool schema
+            if not self.crew_tool_schema:
+                logging.warning("Crew tool schema not initialized, initializing now")
+                self.initialize()
+                
+            # Get the function name from the tool schema
+            if not self.crew_tool_schema or not isinstance(self.crew_tool_schema, dict):
+                raise ValueError("Crew tool schema is not properly initialized")
+                
+            function_info = self.crew_tool_schema.get('function', {})
+            if not isinstance(function_info, dict):
+                raise ValueError("Invalid function info in crew tool schema")
+                
+            function_name = function_info.get('name')
+            if not function_name:
+                raise ValueError("Function name not found in crew tool schema")
+            
+            # Get the function to call
+            if function_name not in self.available_functions:
+                raise ValueError(f"Function {function_name} not found in available functions")
+                
+            function_to_call = self.available_functions[function_name]
+            
+            # Run the crew with the provided inputs
+            input_dict = {} if inputs is None else inputs
+            result = function_to_call(**input_dict)
+            
+            return {
+                "status": "success",
+                "result": result
+            }
+        except Exception as e:
+            error_message = f"Error running crew: {str(e)}"
+            logging.error(error_message, exc_info=True)
+            return {
+                "status": "error",
+                "error": error_message
+            }
+        finally:
+            # Stop loading indicator
+            loading_complete.set()
+            if loading_thread.is_alive():
+                loading_thread.join(timeout=1.0)
     
     def process_message(self, user_message: str) -> Dict[str, Any]:
         """
