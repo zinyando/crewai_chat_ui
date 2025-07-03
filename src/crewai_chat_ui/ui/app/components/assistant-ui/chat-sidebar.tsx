@@ -26,6 +26,7 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     currentChatId,
     chatHistory,
     isDarkMode,
+    setCrews,
     setCurrentCrew,
     setCurrentChat,
     createChat,
@@ -40,6 +41,18 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
 
   // Set initial chat when component mounts
   useEffect(() => {
+    // Fetch crews if not already loaded
+    if (crews.length === 0) {
+      fetch('/api/crews')
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success' && Array.isArray(data.crews)) {
+            setCrews(data.crews);
+          }
+        })
+        .catch(error => console.error('Error fetching crews:', error));
+    }
+    
     if (!searchParams.get('chatId')) {
       if (Object.keys(chatHistory).length === 0) {
         // Create a new chat if no existing chats
@@ -70,7 +83,7 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
         })
       }
     }
-  }, [chatHistory, currentCrewId, searchParams, setCurrentChat, setSearchParams, createChat])
+  }, [chatHistory, currentCrewId, searchParams, setCurrentChat, setSearchParams, createChat, crews.length, setCrews])
 
   // Create a new chat
   const handleNewChat = () => {
@@ -137,7 +150,7 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
     <>
       <aside className="flex h-full w-64 flex-col bg-background border-r">
         <div className="flex items-center justify-between p-4">
-          <h2 className="text-lg font-semibold">CrewAI Chat UI</h2>
+          <h2 className="text-lg font-semibold">Chats</h2>
           <Button
             variant="ghost"
             size="icon"
@@ -198,7 +211,7 @@ export const ChatSidebar = ({ children }: ChatSidebarProps) => {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 opacity-0 group-hover:opacity-100"
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent) => {
                   e.stopPropagation()
                   handleDeleteChat(chat.id)
                 }}
