@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { useChatStore } from "~/lib/store";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Moon, Sun } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import ReactMarkdown from "react-markdown";
 
@@ -41,7 +41,7 @@ interface CrewDetails {
 
 export default function Kickoff() {
   const navigate = useNavigate();
-  const { crews, setCrews, isDarkMode } = useChatStore();
+  const { crews, setCrews, isDarkMode, toggleDarkMode } = useChatStore();
   const [loading, setLoading] = useState(false);
   const [selectedCrewId, setSelectedCrewId] = useState<string>("");
   const [crewDetails, setCrewDetails] = useState<CrewDetails | null>(null);
@@ -184,17 +184,27 @@ export default function Kickoff() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
-      <header className="py-4 px-6 border-b">
-        <div className="flex items-center">
+      <header className="py-4 px-6 border-b bg-background">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleBack}
+              className="mr-4"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-2xl font-bold">Kickoff Mode</h1>
+          </div>
           <Button
             variant="ghost"
             size="icon"
-            onClick={handleBack}
-            className="mr-4"
+            onClick={toggleDarkMode}
+            className="h-8 w-8"
           >
-            <ArrowLeft className="h-5 w-5" />
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
-          <h1 className="text-2xl font-bold">Kickoff Mode</h1>
         </div>
       </header>
 
