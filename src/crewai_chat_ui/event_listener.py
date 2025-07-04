@@ -48,10 +48,9 @@ class CrewVisualizationListener(BaseEventListener):
         await websocket.accept()
         self.active_connections.append(websocket)
         logger.info(f"WebSocket client connected. Total connections: {len(self.active_connections)}")
-        # Send current state to the new client
-        if self.agent_states:
-            logger.info(f"Sending initial state to new client")
-            await self.send_update(websocket)
+        # Always send current state to the new client, even if empty
+        logger.info(f"Sending initial state to new client")
+        await self.send_update(websocket)
     
     def disconnect(self, websocket: WebSocket):
         """Disconnect a WebSocket client."""
