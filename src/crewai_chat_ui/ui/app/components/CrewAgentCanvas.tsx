@@ -3,7 +3,6 @@ import React, {
   useEffect,
   useRef,
   useCallback,
-  useMemo,
 } from "react";
 import { Card } from "../components/ui/card";
 import { Loader2 } from "lucide-react";
@@ -22,7 +21,6 @@ import type {
   Edge,
   NodeTypes,
   NodeProps,
-  XYPosition,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -472,29 +470,20 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
           return newState;
         });
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error parsing WebSocket message:", error);
-        setError(`Error parsing data: ${error.message || "Unknown error"}`);
+        setError("Error parsing message");
       }
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed");
+      setConnected(false);
     };
 
     ws.onerror = (event: Event) => {
       console.error("WebSocket error:", event);
-      setError("Failed to connect to visualization service");
-      setConnected(false);
-    };
-
-    ws.onclose = () => {
-      console.log("WebSocket disconnected");
-      setConnected(false);
-    };
-
-    // Clean up WebSocket connection when component unmounts
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      setError("Error occurred");
     };
   }, [crewId]);
 
@@ -522,15 +511,25 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
         id: `crew-${state.crew.id}`,
         type: "crew",
         data: crewData,
-        position: { x: 400, y: 50 },
+        position: { x: 0, y: 50 },
         draggable: true,
+        sourcePosition: Position.Bottom,
       });
     }
 
-    // Add agent nodes
-    state.agents.forEach((agent: Agent, index: number) => {
-      const xPos = 200 + (index % 4) * 220; // More compact horizontal spacing
-      const yPos = 200 + Math.floor(index / 4) * 120; // More compact vertical spacing
+    // Determine the order of agents. If the crew provides `execution_order`, respect it; otherwise, keep the original array order.
+    const orderedAgents: Agent[] = state.crew?.execution_order?.length
+      ? state.crew.execution_order
+          .map((agentId) => state.agents.find((a) => a.id === agentId))
+          .filter(Boolean) as Agent[]
+      : [...state.agents];
+
+    // Add agent nodes in a vertical flow layout
+    orderedAgents.forEach((agent: Agent, index: number) => {
+      // Align all nodes at x = 0. React-Flow `fitView` will keep them centred in the viewport.
+      const xPos = 0;
+      // Stack nodes vertically with equal spacing
+      const yPos = 200 + index * 150;
 
       // Find tasks associated with this agent
       const associatedTasks = state.tasks.filter(
@@ -552,89 +551,50 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
         data: agentData,
         position: { x: xPos, y: yPos },
         draggable: true,
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
       });
+    });
 
-      if (state.crew) {
+    // Create vertical flow connections between nodes
+    if (state.agents.length > 0) {
+      // Connect crew to first agent if crew exists
+      if (state.crew && orderedAgents.length > 0) {
+        const firstAgent = orderedAgents[0];
         newEdges.push({
-          id: `edge-crew-${agent.id}`,
+          id: `edge-crew-${state.crew.id}-agent-${firstAgent.id}`,
           source: `crew-${state.crew.id}`,
-          target: `agent-${agent.id}`,
+          target: `agent-${firstAgent.id}`,
           markerEnd: {
             type: MarkerType.ArrowClosed,
           },
-          style: { strokeWidth: 2 },
-          animated: agent.status === "running",
+          style: { strokeWidth: 1, stroke: "#666", strokeDasharray: "5,5" },
+          animated: false,
         });
       }
-    });
 
-    // Create agent-to-agent connections based on crew type and execution order
-    if (state.crew && state.agents.length > 1) {
-      const crewType = state.crew.type || "sequential"; // Default to sequential if not specified
-      const executionOrder =
-        state.crew.execution_order || state.agents.map((agent) => agent.id);
+      // Connect agents in a vertical chain (like in the screenshot)
+      for (let i = 0; i < orderedAgents.length - 1; i++) {
+        const sourceAgent = orderedAgents[i];
+        const targetAgent = orderedAgents[i + 1];
 
-      if (crewType === "sequential") {
-        // For sequential crews, connect agents in a chain based on execution order
-        for (let i = 0; i < executionOrder.length - 1; i++) {
-          const sourceId = executionOrder[i];
-          const targetId = executionOrder[i + 1];
-
-          newEdges.push({
-            id: `edge-agent-${sourceId}-${targetId}`,
-            source: `agent-${sourceId}`,
-            target: `agent-${targetId}`,
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-            },
-            style: { strokeWidth: 2, stroke: "#3b82f6" },
-            animated:
-              state.agents.find((a) => a.id === sourceId)?.status ===
-                "completed" &&
-              state.agents.find((a) => a.id === targetId)?.status === "running",
-            label: `${i + 1} → ${i + 2}`,
-            labelStyle: { fill: "#3b82f6", fontWeight: 700 },
-            labelBgStyle: { fill: "rgba(255, 255, 255, 0.75)" },
-          });
-        }
-      } else if (crewType === "hierarchical") {
-        // For hierarchical crews, create a tree structure
-        // This is a simplified approach - in a real implementation, you'd need
-        // hierarchy data from the backend
-        const rootAgentId = executionOrder[0];
-
-        // Connect the root agent to all other agents
-        for (let i = 1; i < executionOrder.length; i++) {
-          const targetId = executionOrder[i];
-
-          newEdges.push({
-            id: `edge-agent-${rootAgentId}-${targetId}`,
-            source: `agent-${rootAgentId}`,
-            target: `agent-${targetId}`,
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-            },
-            style: { strokeWidth: 2, stroke: "#8b5cf6" },
-            animated:
-              state.agents.find((a) => a.id === rootAgentId)?.status ===
-              "running",
-            label: `delegates`,
-            labelStyle: { fill: "#8b5cf6", fontWeight: 700 },
-            labelBgStyle: { fill: "rgba(255, 255, 255, 0.75)" },
-          });
-        }
+        newEdges.push({
+          id: `edge-agent-${sourceAgent.id}-agent-${targetAgent.id}`,
+          source: `agent-${sourceAgent.id}`,
+          target: `agent-${targetAgent.id}`,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+          },
+          style: { strokeWidth: 1, stroke: "#666", strokeDasharray: "5,5" },
+          animated: false,
+        });
       }
     }
 
+    // Update the React Flow nodes and edges
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [state, setNodes, setEdges]);
-
-  // Handle node drag stop event
-  const onNodeDragStop = useCallback((event: React.MouseEvent, node: any) => {
-    console.log("Node moved:", node);
-    // You could save node positions here if needed
-  }, []);
+  }, [state])
 
   return (
     <Card className="p-6 mb-6 overflow-hidden">
@@ -689,7 +649,6 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onNodeDragStop={onNodeDragStop}
             nodeTypes={nodeTypes}
             fitView
             attributionPosition="bottom-right"
