@@ -126,15 +126,81 @@ class CrewVisualizationListener(BaseEventListener):
                     "description": agent.backstory[:100] + "..." if len(agent.backstory) > 100 else agent.backstory,
                 }
             
-            # Store task information if available
+            # Store task information if available and associate with agents
             if hasattr(source, "tasks"):
+                # First, collect all agents by role for matching
+                agent_by_role = {}
+                agent_by_id = {}
+                for agent in source.agents:
+                    agent_id = str(agent.id) if hasattr(agent, "id") else None
+                    if agent_id:
+                        agent_by_id[agent_id] = agent
+                        role_key = agent.role.lower() if hasattr(agent, "role") else ""
+                        agent_by_role[role_key] = agent_id
+                
+                # Process tasks and try to associate them with agents
                 for i, task in enumerate(source.tasks):
                     task_id = str(task.id) if hasattr(task, "id") else f"task_{i}"
+                    task_desc = task.description.lower() if hasattr(task, "description") else ""
+                    
+                    # Try to find an agent for this task
+                    assigned_agent_id = None
+                    
+                    # First check if task already has an agent assigned
+                    if hasattr(task, "agent") and task.agent:
+                        agent_id = str(task.agent.id) if hasattr(task.agent, "id") else None
+                        if agent_id:
+                            assigned_agent_id = agent_id
+                    
+                    # If no agent is assigned, try to match based on task description and agent roles
+                    if not assigned_agent_id:
+                        # Try to match based on keywords in task description and agent roles
+                        best_match = None
+                        best_match_score = 0
+                        
+                        for role, agent_id in agent_by_role.items():
+                            # Skip empty roles
+                            if not role:
+                                continue
+                                
+                            # Calculate a simple matching score
+                            role_words = set(role.split())
+                            task_words = set(task_desc.split())
+                            
+                            # Count matching significant words (longer than 3 chars)
+                            match_score = sum(1 for word in role_words & task_words if len(word) > 3)
+                            
+                            # Special case handling for common patterns
+                            if "research" in role and "research" in task_desc:
+                                match_score += 3
+                            if "analyst" in role and any(kw in task_desc for kw in ["analyz", "review", "report"]):
+                                match_score += 3
+                            
+                            if match_score > best_match_score:
+                                best_match_score = match_score
+                                best_match = agent_id
+                        
+                        # If we found a reasonable match, assign the task to this agent
+                        if best_match_score > 0:
+                            assigned_agent_id = best_match
+                        # If we still don't have a match but there's only one agent, assign to it
+                        elif len(agent_by_id) == 1:
+                            assigned_agent_id = next(iter(agent_by_id.keys()))
+                        # If we have exactly two agents and can identify researcher/analyst pattern
+                        elif len(agent_by_id) == 2:
+                            # For a research task, assign to the first agent
+                            if "research" in task_desc:
+                                assigned_agent_id = list(agent_by_id.keys())[0]
+                            # For a reporting/analysis task, assign to the second agent
+                            elif any(kw in task_desc for kw in ["report", "analyz", "review", "summarize"]):
+                                assigned_agent_id = list(agent_by_id.keys())[1]
+                    
+                    # Store the task with its assigned agent (if any)
                     self.task_states[task_id] = {
                         "id": task_id,
-                        "description": task.description,
+                        "description": task.description if hasattr(task, "description") else "",
                         "status": "pending",
-                        "agent_id": None,  # Will be set when task is assigned
+                        "agent_id": assigned_agent_id,
                     }
             
             # Broadcast the update asynchronously
@@ -197,7 +263,7 @@ class CrewVisualizationListener(BaseEventListener):
                 if task_id not in self.task_states:
                     self.task_states[task_id] = {
                         "id": task_id,
-                        "description": task.description,
+                        "description": task.description if hasattr(task, "description") else "",
                         "status": "running",
                         "agent_id": None,
                     }
@@ -205,16 +271,30 @@ class CrewVisualizationListener(BaseEventListener):
                     self.task_states[task_id]["status"] = "running"
                 
                 # If there's an agent assigned to this task, update it
-                if hasattr(task, "agent"):
+                agent_id = None
+                
+                # First check if task has an agent directly assigned
+                if hasattr(task, "agent") and task.agent:
                     agent = task.agent
                     agent_id = str(agent.id) if hasattr(agent, "id") else None
+                
+                # If no agent is directly assigned, check if the source is an agent
+                if not agent_id and hasattr(source, "id") and hasattr(source, "role"):
+                    # The source might be the agent executing this task
+                    agent_id = str(source.id)
+                
+                # If we found an agent ID, update the task and agent states
+                if agent_id:
+                    # Update task with agent ID
+                    self.task_states[task_id]["agent_id"] = agent_id
                     
-                    if agent_id:
-                        self.task_states[task_id]["agent_id"] = agent_id
+                    # Also update agent status if it exists
+                    if agent_id in self.agent_states:
+                        self.agent_states[agent_id]["status"] = "running"
                         
-                        # Also update agent status if it exists
-                        if agent_id in self.agent_states:
-                            self.agent_states[agent_id]["status"] = "running"
+                        # Log the association
+                        agent_name = self.agent_states[agent_id].get("name", "Unknown agent")
+                        logger.info(f"Associated task '{task_id}' with agent '{agent_name}' (ID: {agent_id})")
                 
                 # Broadcast the update asynchronously
                 asyncio.create_task(self.broadcast_update())

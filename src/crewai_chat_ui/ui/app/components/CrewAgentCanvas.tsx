@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { Card } from "../components/ui/card";
 import { Loader2 } from "lucide-react";
 import {
@@ -16,7 +22,7 @@ import type {
   Edge,
   NodeTypes,
   NodeProps,
-  XYPosition
+  XYPosition,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -35,6 +41,8 @@ interface Task {
   status: "pending" | "running" | "completed";
   agent_id: string | null;
   output?: any;
+  next_tasks?: string[];
+  depends_on?: string[];
 }
 
 interface Crew {
@@ -44,6 +52,8 @@ interface Crew {
   started_at?: string;
   completed_at?: string;
   output?: string;
+  type?: "sequential" | "hierarchical";
+  execution_order?: string[];
 }
 
 // Define custom node data types
@@ -53,6 +63,7 @@ interface AgentNodeData extends Record<string, unknown> {
   name: string;
   status: "initializing" | "waiting" | "running" | "completed";
   description: string;
+  associatedTasks?: Task[];
 }
 
 interface TaskNodeData extends Record<string, unknown> {
@@ -62,6 +73,8 @@ interface TaskNodeData extends Record<string, unknown> {
   agent_id: string | null;
   output?: any;
   assignedAgentName?: string;
+  next_tasks?: string[];
+  depends_on?: string[];
 }
 
 interface CrewNodeData extends Record<string, unknown> {
@@ -71,6 +84,8 @@ interface CrewNodeData extends Record<string, unknown> {
   started_at?: string;
   completed_at?: string;
   output?: string;
+  type?: "sequential" | "hierarchical";
+  execution_order?: string[];
 }
 
 interface VisualizationState {
@@ -105,33 +120,100 @@ const getStatusColor = (status: string): string => {
 // Custom node components
 const AgentNode = ({ data }: NodeProps) => {
   const typedData = data as AgentNodeData;
+  const [showTasks, setShowTasks] = useState(false);
+  const [associatedTasks, setAssociatedTasks] = useState<Task[]>([]);
+
+  // Access tasks from the data property that we'll pass in
+  useEffect(() => {
+    // Get tasks from the data property
+    if (typedData.associatedTasks) {
+      setAssociatedTasks(typedData.associatedTasks);
+    } else {
+      setAssociatedTasks([]);
+    }
+  }, [typedData.associatedTasks]);
+
   return (
     <div
       className={`
-        border rounded-md p-3 bg-card w-64 shadow-md
-        ${typedData.status === "running" ? "animate-pulse" : ""}
-        ${typedData.status === "completed" ? "border-green-500" : ""}
+        border rounded-md p-2 bg-card shadow-md w-52
+        ${typedData.status === "running" ? "border-green-500 border-2" : ""}
+        ${typedData.status === "completed" ? "border-blue-500" : ""}
       `}
     >
-      <div className="flex items-center mb-2">
-        <div
-          className={`w-2 h-2 rounded-full mr-2 ${getStatusColor(typedData.status)}`}
-        ></div>
-        <h5 className="font-medium">{typedData.name}</h5>
+      {/* Agent Header - Name and Status */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <div
+            className={`w-2.5 h-2.5 rounded-full mr-1.5 ${getStatusColor(
+              typedData.status
+            )}`}
+          ></div>
+          <h5 className="font-bold text-sm truncate max-w-[120px]">
+            {typedData.name}
+          </h5>
+        </div>
         {typedData.status === "running" && (
-          <span className="ml-auto text-xs text-green-500 flex items-center">
-            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+          <span className="text-xs text-green-500 flex items-center">
+            <Loader2 className="h-2.5 w-2.5 animate-spin mr-0.5" />
             Active
           </span>
         )}
       </div>
-      <p className="text-sm text-muted-foreground">{typedData.role}</p>
-      <p className="text-sm text-muted-foreground">
-        {typedData.description}
-      </p>
-      <div className="mt-2 text-xs text-muted-foreground">
-        <p className="font-semibold">Role: {typedData.role}</p>
-        <p className="mt-1">{typedData.description}</p>
+
+      {/* Role - Critical Info */}
+      <div className="text-xs text-muted-foreground truncate">
+        {typedData.role}
+      </div>
+
+      {/* Tasks Button */}
+      <div className="mt-1.5 pt-1.5 border-t border-dashed border-gray-200 dark:border-gray-700">
+        <button
+          className="w-full text-xs py-0.5 px-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded flex items-center justify-center transition-colors"
+          onMouseEnter={() => setShowTasks(true)}
+          onMouseLeave={() => setShowTasks(false)}
+        >
+          <span className="mr-1">Tasks</span>
+          <span className="bg-gray-200 dark:bg-gray-700 rounded-full w-4 h-4 flex items-center justify-center text-xs">
+            {associatedTasks.length}
+          </span>
+        </button>
+
+        {/* Task Popup */}
+        {showTasks && (
+          <div className="absolute z-10 mt-1 p-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg w-64">
+            <h6 className="text-xs font-semibold mb-1.5">Associated Tasks:</h6>
+            <div className="max-h-40 overflow-y-auto">
+              {associatedTasks.length > 0 ? (
+                associatedTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className={`text-xs p-1.5 mb-1 rounded ${
+                      task.status === "running"
+                        ? "bg-green-50 dark:bg-green-900/20"
+                        : task.status === "completed"
+                        ? "bg-blue-50 dark:bg-blue-900/20"
+                        : "bg-gray-50 dark:bg-gray-800/50"
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <div
+                        className={`w-2 h-2 rounded-full mr-1.5 ${getStatusColor(
+                          task.status
+                        )}`}
+                      ></div>
+                      <span className="truncate">{task.description}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No tasks assigned
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -142,10 +224,10 @@ const TaskNode = ({ data }: NodeProps) => {
   return (
     <div
       className={`
-        text-xs p-2 rounded border w-48
+        text-xs p-3 rounded border shadow-md
         ${
           typedData.status === "running"
-            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 shadow-sm"
+            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
             : ""
         }
         ${
@@ -153,44 +235,44 @@ const TaskNode = ({ data }: NodeProps) => {
             ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
             : ""
         }
-        ${
-          typedData.status === "pending"
-            ? "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
-            : ""
-        }
       `}
     >
       <div className="flex items-center">
         <div
-          className={`w-2 h-2 rounded-full mr-2 ${getStatusColor(typedData.status)}`}
+          className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(
+            typedData.status
+          )}`}
         ></div>
         {typedData.status === "running" && (
           <Loader2 className="h-3 w-3 animate-spin mr-1" />
         )}
-        <span className="font-medium line-clamp-1">{typedData.description}</span>
+        <span className="font-medium">{typedData.description}</span>
       </div>
       {typedData.assignedAgentName && (
         <div
-          className={`text-xs mt-1 ${
+          className={`text-xs mt-2 ${
             typedData.status === "running"
               ? "text-green-600 font-medium"
               : "text-muted-foreground"
           }`}
         >
-          Assigned to: {typedData.assignedAgentName}
-          {typedData.status === "running" && " (Active)"}
+          Agent: {typedData.assignedAgentName}
         </div>
       )}
-      {typedData.output && typedData.status === "completed" && (
-        <div className="mt-2 p-2 bg-muted rounded-sm text-xs">
-          <p className="font-semibold">Output:</p>
-          <p className="whitespace-pre-wrap break-words">
-            {typeof typedData.output === "string"
-              ? typedData.output.length > 100
-                ? `${typedData.output.substring(0, 100)}...`
-                : typedData.output
-              : JSON.stringify(typedData.output, null, 2)}
-          </p>
+      {(typedData.next_tasks?.length || typedData.depends_on?.length) && (
+        <div className="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-gray-700 text-muted-foreground">
+          {typedData.depends_on?.length && (
+            <div className="text-xs">
+              <span className="font-medium">Depends on:</span>{" "}
+              {typedData.depends_on?.length}
+            </div>
+          )}
+          {typedData.next_tasks?.length && (
+            <div className="text-xs">
+              <span className="font-medium">Next tasks:</span>{" "}
+              {typedData.next_tasks?.length}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -227,6 +309,14 @@ const CrewNode = ({ data }: NodeProps) => {
         </span>
       )}
       <div className="mt-2 text-xs text-muted-foreground">
+        {typedData.type && (
+          <p className="mt-1 flex items-center">
+            <span className="font-medium">Type:</span>
+            <span className="ml-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full capitalize">
+              {typedData.type}
+            </span>
+          </p>
+        )}
         {typedData.started_at && (
           <p className="mt-1">
             Started: {new Date(typedData.started_at).toLocaleString()}
@@ -412,8 +502,8 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
   useEffect(() => {
     if (!state?.agents?.length && !state?.crew) return;
 
-    const newNodes: any[] = [];
-    const newEdges: any[] = [];
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
 
     // Add crew node if available
     if (state.crew) {
@@ -424,6 +514,8 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
         started_at: state.crew.started_at,
         completed_at: state.crew.completed_at,
         output: state.crew.output,
+        type: state.crew.type,
+        execution_order: state.crew.execution_order,
       };
 
       newNodes.push({
@@ -437,8 +529,13 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
     // Add agent nodes
     state.agents.forEach((agent: Agent, index: number) => {
-      const xPos = 200 + (index % 3) * 300;
-      const yPos = 200 + Math.floor(index / 3) * 150;
+      const xPos = 200 + (index % 4) * 220; // More compact horizontal spacing
+      const yPos = 200 + Math.floor(index / 4) * 120; // More compact vertical spacing
+
+      // Find tasks associated with this agent
+      const associatedTasks = state.tasks.filter(
+        (task) => task.agent_id === agent.id
+      );
 
       const agentData: AgentNodeData = {
         id: agent.id,
@@ -446,6 +543,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
         role: agent.role,
         status: agent.status,
         description: agent.description,
+        associatedTasks: associatedTasks,
       };
 
       newNodes.push({
@@ -470,51 +568,63 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       }
     });
 
-    // Add task nodes
-    state.tasks.forEach((task: Task, index: number) => {
-      const assignedAgent = state.agents.find((a: Agent) => a.id === task.agent_id);
-      const taskData: TaskNodeData = {
-        id: task.id,
-        description: task.description,
-        status: task.status,
-        agent_id: task.agent_id,
-        output: task.output,
-        assignedAgentName: assignedAgent?.name,
-      };
+    // Create agent-to-agent connections based on crew type and execution order
+    if (state.crew && state.agents.length > 1) {
+      const crewType = state.crew.type || "sequential"; // Default to sequential if not specified
+      const executionOrder =
+        state.crew.execution_order || state.agents.map((agent) => agent.id);
 
-      let xPos = 200 + (index % 4) * 250;
-      let yPos = 400 + Math.floor(index / 4) * 150;
+      if (crewType === "sequential") {
+        // For sequential crews, connect agents in a chain based on execution order
+        for (let i = 0; i < executionOrder.length - 1; i++) {
+          const sourceId = executionOrder[i];
+          const targetId = executionOrder[i + 1];
 
-      if (assignedAgent) {
-        const agentIndex = state.agents.findIndex(
-          (a) => a.id === assignedAgent.id
-        );
-        const agentXPos = 200 + (agentIndex % 3) * 300;
-        xPos = agentXPos + ((index % 2) * 100 - 50);
-        yPos = 350 + Math.floor(index / 2) * 120;
+          newEdges.push({
+            id: `edge-agent-${sourceId}-${targetId}`,
+            source: `agent-${sourceId}`,
+            target: `agent-${targetId}`,
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+            },
+            style: { strokeWidth: 2, stroke: "#3b82f6" },
+            animated:
+              state.agents.find((a) => a.id === sourceId)?.status ===
+                "completed" &&
+              state.agents.find((a) => a.id === targetId)?.status === "running",
+            label: `${i + 1} → ${i + 2}`,
+            labelStyle: { fill: "#3b82f6", fontWeight: 700 },
+            labelBgStyle: { fill: "rgba(255, 255, 255, 0.75)" },
+          });
+        }
+      } else if (crewType === "hierarchical") {
+        // For hierarchical crews, create a tree structure
+        // This is a simplified approach - in a real implementation, you'd need
+        // hierarchy data from the backend
+        const rootAgentId = executionOrder[0];
+
+        // Connect the root agent to all other agents
+        for (let i = 1; i < executionOrder.length; i++) {
+          const targetId = executionOrder[i];
+
+          newEdges.push({
+            id: `edge-agent-${rootAgentId}-${targetId}`,
+            source: `agent-${rootAgentId}`,
+            target: `agent-${targetId}`,
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+            },
+            style: { strokeWidth: 2, stroke: "#8b5cf6" },
+            animated:
+              state.agents.find((a) => a.id === rootAgentId)?.status ===
+              "running",
+            label: `delegates`,
+            labelStyle: { fill: "#8b5cf6", fontWeight: 700 },
+            labelBgStyle: { fill: "rgba(255, 255, 255, 0.75)" },
+          });
+        }
       }
-
-      newNodes.push({
-        id: `task-${task.id}`,
-        type: "task",
-        data: taskData,
-        position: { x: xPos, y: yPos },
-        draggable: true,
-      });
-
-      if (assignedAgent) {
-        newEdges.push({
-          id: `edge-${assignedAgent.id}-${task.id}`,
-          source: `agent-${assignedAgent.id}`,
-          target: `task-${task.id}`,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-          },
-          style: { strokeWidth: 1.5 },
-          animated: task.status === "running",
-        });
-      }
-    });
+    }
 
     setNodes(newNodes);
     setEdges(newEdges);
