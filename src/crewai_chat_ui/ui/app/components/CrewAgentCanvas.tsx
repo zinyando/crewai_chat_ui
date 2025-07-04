@@ -71,9 +71,12 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("WebSocket connected");
+      console.log("WebSocket connected for crew visualization");
       setConnected(true);
       setError(null);
+      
+      // Log the current state when connection is established
+      console.log("Current state on WebSocket connection:", state);
     };
 
     ws.onmessage = (event) => {
@@ -135,14 +138,28 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
   // Always show the component, even if not running
   // This allows us to display agents as soon as they're available
 
-  // If no agents yet, show loading
-  if (!state?.agents?.length) {
+  // Show loading if not connected
+  if (!connected) {
     return (
       <Card className="p-6 mb-6">
         <div className="flex flex-col items-center justify-center h-40">
           <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
           <p className="text-muted-foreground">
-            Initializing crew visualization...
+            Connecting to visualization service...
+          </p>
+        </div>
+      </Card>
+    );
+  }
+  
+  // Show initializing UI if connected but no agents or crew data yet
+  if (!state?.agents?.length && (!state?.crew || Object.keys(state?.crew).length === 0)) {
+    return (
+      <Card className="p-6 mb-6">
+        <div className="flex flex-col items-center justify-center h-40">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground">
+            Crew is initializing. Visualization will appear shortly...
           </p>
         </div>
       </Card>
