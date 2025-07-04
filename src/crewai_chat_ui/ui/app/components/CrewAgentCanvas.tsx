@@ -1,9 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-} from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Card } from "../components/ui/card";
 import { Loader2 } from "lucide-react";
 import {
@@ -16,12 +11,7 @@ import {
   Position,
   MarkerType,
 } from "@xyflow/react";
-import type {
-  Node,
-  Edge,
-  NodeTypes,
-  NodeProps,
-} from "@xyflow/react";
+import type { Node, Edge, NodeTypes, NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 // Define domain models
@@ -489,112 +479,87 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
   // Update nodes and edges when state changes
   useEffect(() => {
-    if (!state?.agents?.length && !state?.crew) return;
+    if (!state?.crew && state.agents.length === 0) return;
 
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
 
-    // Add crew node if available
+    // 1. Crew node -----------------------------------------------------------
     if (state.crew) {
-      const crewData: CrewNodeData = {
-        id: state.crew.id,
-        name: state.crew.name,
-        status: state.crew.status,
-        started_at: state.crew.started_at,
-        completed_at: state.crew.completed_at,
-        output: state.crew.output,
-        type: state.crew.type,
-        execution_order: state.crew.execution_order,
-      };
-
-      newNodes.push({
+      const crewNode: Node = {
         id: `crew-${state.crew.id}`,
         type: "crew",
-        data: crewData,
+        data: {
+          id: state.crew.id,
+          name: state.crew.name,
+          status: state.crew.status,
+          started_at: state.crew.started_at,
+          completed_at: state.crew.completed_at,
+          output: state.crew.output,
+          type: state.crew.type,
+          execution_order: state.crew.execution_order,
+        } as CrewNodeData,
         position: { x: 0, y: 50 },
         draggable: true,
         sourcePosition: Position.Bottom,
-      });
+      };
+      newNodes.push(crewNode);
     }
 
-    // Determine the order of agents. If the crew provides `execution_order`, respect it; otherwise, keep the original array order.
+    // 2. Work out agent order ----------------------------------------------
     const orderedAgents: Agent[] = state.crew?.execution_order?.length
       ? state.crew.execution_order
-          .map((agentId) => state.agents.find((a) => a.id === agentId))
-          .filter(Boolean) as Agent[]
+          .map((aid) => state.agents.find((a) => a.id === aid)!)
+          .filter(Boolean)
       : [...state.agents];
 
-    // Add agent nodes in a vertical flow layout
-    orderedAgents.forEach((agent: Agent, index: number) => {
-      // Align all nodes at x = 0. React-Flow `fitView` will keep them centred in the viewport.
-      const xPos = 0;
-      // Stack nodes vertically with equal spacing
-      const yPos = 200 + index * 150;
-
-      // Find tasks associated with this agent
-      const associatedTasks = state.tasks.filter(
-        (task) => task.agent_id === agent.id
-      );
-
-      const agentData: AgentNodeData = {
-        id: agent.id,
-        name: agent.name,
-        role: agent.role,
-        status: agent.status,
-        description: agent.description,
-        associatedTasks: associatedTasks,
-      };
+    // 3. Agent nodes ---------------------------------------------------------
+    orderedAgents.forEach((agent, idx) => {
+      const yPos = 200 + idx * 150;
+      const agentTasks = state.tasks.filter((t) => t.agent_id === agent.id);
 
       newNodes.push({
         id: `agent-${agent.id}`,
         type: "agent",
-        data: agentData,
-        position: { x: xPos, y: yPos },
+        data: {
+          ...agent,
+          associatedTasks: agentTasks,
+        } as AgentNodeData,
+        position: { x: 0, y: yPos },
         draggable: true,
         sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
       });
     });
 
-    // Create vertical flow connections between nodes
-    if (state.agents.length > 0) {
-      // Connect crew to first agent if crew exists
-      if (state.crew && orderedAgents.length > 0) {
-        const firstAgent = orderedAgents[0];
-        newEdges.push({
-          id: `edge-crew-${state.crew.id}-agent-${firstAgent.id}`,
-          source: `crew-${state.crew.id}`,
-          target: `agent-${firstAgent.id}`,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-          },
-          style: { strokeWidth: 1, stroke: "#666", strokeDasharray: "5,5" },
-          animated: false,
-        });
-      }
-
-      // Connect agents in a vertical chain (like in the screenshot)
-      for (let i = 0; i < orderedAgents.length - 1; i++) {
-        const sourceAgent = orderedAgents[i];
-        const targetAgent = orderedAgents[i + 1];
-
-        newEdges.push({
-          id: `edge-agent-${sourceAgent.id}-agent-${targetAgent.id}`,
-          source: `agent-${sourceAgent.id}`,
-          target: `agent-${targetAgent.id}`,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-          },
-          style: { strokeWidth: 1, stroke: "#666", strokeDasharray: "5,5" },
-          animated: false,
-        });
-      }
+    // 4. Edges ---------------------------------------------------------------
+    if (state.crew && orderedAgents.length) {
+      newEdges.push({
+        id: `edge-crew-${state.crew.id}-${orderedAgents[0].id}`,
+        source: `crew-${state.crew.id}`,
+        target: `agent-${orderedAgents[0].id}`,
+        type: "straight",
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { strokeWidth: 1, stroke: "#666", strokeDasharray: "5 5" },
+        animated: false,
+      });
     }
 
-    // Update the React Flow nodes and edges
+    for (let i = 0; i < orderedAgents.length - 1; i++) {
+      newEdges.push({
+        id: `edge-${orderedAgents[i].id}-${orderedAgents[i + 1].id}`,
+        source: `agent-${orderedAgents[i].id}`,
+        target: `agent-${orderedAgents[i + 1].id}`,
+        type: "straight",
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { strokeWidth: 1, stroke: "#666", strokeDasharray: "5 5" },
+        animated: false,
+      });
+    }
+
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [state])
+  }, [state]);
 
   return (
     <Card className="p-6 mb-6 overflow-hidden">
