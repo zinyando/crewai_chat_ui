@@ -92,15 +92,69 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
           return;
         }
         
-        // Check if this is real data with agents
-        if (data.agents && Array.isArray(data.agents) && data.agents.length > 0) {
-          console.log("Received real data with agents:", data.agents.length);
+        // Always set hasReceivedData to true if we receive any valid crew/agent/task data
+        // This ensures we show the visualization as soon as possible
+        if ((data.crew && Object.keys(data.crew).length > 0) || 
+            (data.agents && Array.isArray(data.agents) && data.agents.length > 0) || 
+            (data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0)) {
+          console.log("Received valid crew/agent/task data");
           setHasReceivedData(true);
         }
         
         console.log("Updating state with:", data);
-        setState(data);
-        console.log("State after update:", state); // Note: This will show the previous state due to closure
+        // Use a functional update to ensure we're working with the latest state
+        setState(prevState => {
+          // Create a deep merge of the state
+          const newState = { ...prevState };
+          
+          // Update crew if provided
+          if (data.crew) {
+            newState.crew = { ...prevState.crew, ...data.crew };
+          }
+          
+          // Update agents by ID if provided
+          if (data.agents && Array.isArray(data.agents)) {
+            // Create a map of existing agents by ID for faster lookup
+            const agentMap = new Map();
+            prevState.agents.forEach(agent => agentMap.set(agent.id, agent));
+            
+            // Update or add new agents
+            const updatedAgents = data.agents.map((newAgent: Agent) => {
+              const existingAgent = agentMap.get(newAgent.id);
+              return existingAgent ? { ...existingAgent, ...newAgent } : newAgent;
+            });
+            
+            // Preserve agents that weren't in the update
+            const updatedAgentIds = new Set(updatedAgents.map((a: Agent) => a.id));
+            const unchangedAgents = prevState.agents.filter((a: Agent) => !updatedAgentIds.has(a.id));
+            
+            newState.agents = [...unchangedAgents, ...updatedAgents];
+          }
+          
+          // Update tasks by ID if provided
+          if (data.tasks && Array.isArray(data.tasks)) {
+            // Create a map of existing tasks by ID for faster lookup
+            const taskMap = new Map();
+            prevState.tasks.forEach(task => taskMap.set(task.id, task));
+            
+            // Update or add new tasks
+            const updatedTasks = data.tasks.map((newTask: Task) => {
+              const existingTask = taskMap.get(newTask.id);
+              return existingTask ? { ...existingTask, ...newTask } : newTask;
+            });
+            
+            // Preserve tasks that weren't in the update
+            const updatedTaskIds = new Set(updatedTasks.map((t: Task) => t.id));
+            const unchangedTasks = prevState.tasks.filter((t: Task) => !updatedTaskIds.has(t.id));
+            
+            newState.tasks = [...unchangedTasks, ...updatedTasks];
+          }
+          
+          console.log("State after deep merge:", newState);
+          return newState;
+        });
+        
+        // We can't log the updated state here as it won't be updated until the next render
       } catch (err: any) {
         console.error("Error parsing WebSocket message:", err);
         setError(`Error parsing data: ${err.message || 'Unknown error'}`);
@@ -140,17 +194,19 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
   // Helper function to get status color
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "running":
-        return "bg-blue-500";
-      case "completed":
-        return "bg-green-500";
-      case "initializing":
-        return "bg-yellow-500";
-      case "waiting":
-      case "pending":
+    switch (status?.toLowerCase()) {
+      case 'running':
+        return 'bg-green-500 animate-pulse';
+      case 'completed':
+        return 'bg-blue-500';
+      case 'initializing':
+        return 'bg-yellow-500 animate-pulse';
+      case 'pending':
+        return 'bg-gray-400';
+      case 'waiting':
+        return 'bg-gray-400';
       default:
-        return "bg-gray-300 dark:bg-gray-600";
+        return 'bg-gray-400';
     }
   };
 
@@ -199,7 +255,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
         </div>
       )}
 
-      <div className="mb-4">
+      <div className="mb-6">
         <div className="flex items-center">
           <div
             className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(
@@ -207,46 +263,69 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
             )}`}
           ></div>
           <h3 className="text-lg font-medium">{state?.crew?.name || 'Crew'}</h3>
+          {state?.crew?.status === 'running' && (
+            <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 rounded-full flex items-center">
+              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              Running
+            </span>
+          )}
+          {state?.crew?.status === 'completed' && (
+            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 rounded-full">
+              Completed
+            </span>
+          )}
         </div>
         <p className="text-sm text-muted-foreground mt-1">
           Status: <span className="capitalize">{state?.crew?.status || 'unknown'}</span>
+          {state?.crew?.started_at && (
+            <span className="ml-2">Started: {new Date(state.crew.started_at).toLocaleTimeString()}</span>
+          )}
+          {state?.crew?.completed_at && (
+            <span className="ml-2">Completed: {new Date(state.crew.completed_at).toLocaleTimeString()}</span>
+          )}
         </p>
+        {/* Add debug info in development mode */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs">
+            <p>WebSocket connected: {connected ? 'Yes' : 'No'}</p>
+            <p>Has received data: {hasReceivedData ? 'Yes' : 'No'}</p>
+            <p>Agents: {state?.agents?.length || 0}</p>
+            <p>Tasks: {state?.tasks?.length || 0}</p>
+            <p>Running agents: {state?.agents?.filter(a => a.status === 'running').length || 0}</p>
+            <p>Running tasks: {state?.tasks?.filter(t => t.status === 'running').length || 0}</p>
+          </div>
+        )}
       </div>
 
       {/* Agent visualization */}
       <div className="relative" ref={canvasRef}>
         <div className="flex flex-wrap gap-4 mb-6">
-          {state?.agents?.map((agent, index) => (
+          {state?.agents?.map((agent) => (
             <div
               key={agent.id}
-              className={`
-                relative border rounded-lg p-4 flex-1 min-w-[200px] transition-all duration-300
-                ${
-                  agent.status === "running"
-                    ? "shadow-lg border-blue-500 dark:border-blue-400"
-                    : ""
-                }
-              `}
+              className={`border rounded-md p-3 bg-card ${agent.status === 'running' ? 'border-green-500 shadow-md' : ''}`}
             >
               <div className="flex items-center mb-2">
                 <div
-                  className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(
+                  className={`w-2 h-2 rounded-full mr-2 ${getStatusColor(
                     agent.status
                   )}`}
                 ></div>
-                <h4 className="font-medium">{agent.role}</h4>
+                <h5 className="font-medium">{agent.name}</h5>
+                {agent.status === 'running' && (
+                  <span className="ml-auto text-xs text-green-500 flex items-center">
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    Active
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+              <p className="text-sm text-muted-foreground">{agent.role}</p>
+              <p className="text-xs text-muted-foreground mt-1">
                 {agent.description}
               </p>
-              <div className="text-xs font-medium">
-                Status: <span className="capitalize">{agent.status}</span>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Status: <span className={agent.status === 'running' ? 'text-green-500 font-medium' : ''}>{agent.status}</span>
               </div>
-
-              {/* Draw connection lines between agents */}
-              {index < (state?.agents?.length || 0) - 1 && (
-                <div className="hidden md:block absolute top-1/2 right-0 w-4 h-0.5 bg-gray-300 dark:bg-gray-600 translate-x-full"></div>
-              )}
             </div>
           ))}
         </div>
@@ -267,12 +346,12 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
                       text-xs p-2 rounded border
                       ${
                         task.status === "running"
-                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                          ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 shadow-sm animate-pulse"
                           : ""
                       }
                       ${
                         task.status === "completed"
-                          ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
                           : ""
                       }
                       ${
@@ -289,14 +368,18 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
                             task.status
                           )}`}
                         ></div>
+                        {task.status === "running" && (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        )}
                         <span className="font-medium line-clamp-1">
                           {task.description}
                         </span>
                       </div>
                       {assignedAgent && (
-                        <span className="text-muted-foreground">
-                          Agent: {assignedAgent.role}
-                        </span>
+                        <div className={`text-xs mt-1 ${task.status === 'running' ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
+                          Assigned to: {assignedAgent.name}
+                          {task.status === 'running' && ' (Active)'}
+                        </div>
                       )}
                     </div>
                     {task?.status === "completed" && task?.output ? (
