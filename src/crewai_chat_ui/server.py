@@ -2,10 +2,11 @@ import json
 import logging
 import os
 import sys
+import datetime
 from pathlib import Path
 import threading
 from typing import Dict, Optional, List
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import click
 import socket
+import asyncio
 
 # Configure logging
 logging.basicConfig(
@@ -47,6 +49,7 @@ from crewai_chat_ui.crew_loader import (
     discover_available_crews,
 )
 from crewai_chat_ui.chat_handler import ChatHandler
+from crewai_chat_ui.event_listener import crew_visualization_listener
 
 # Create FastAPI app
 app = FastAPI()
@@ -384,6 +387,49 @@ async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
         error_message = f"Error running crew: {str(e)}"
         logging.error(error_message, exc_info=True)
         raise HTTPException(status_code=500, detail=error_message)
+
+
+@app.websocket("/ws/crew-visualization")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time crew visualization updates."""
+    logging.info("New WebSocket connection request for crew visualization")
+    try:
+        # Connect the WebSocket client to the event listener
+        await crew_visualization_listener.connect(websocket)
+        logging.info("WebSocket client connected successfully")
+        
+        # Send a test message to verify the connection is working
+        try:
+            from crewai_chat_ui.event_listener import CustomJSONEncoder
+            test_message = {"type": "connection_test", "status": "connected", "timestamp": datetime.datetime.now()}
+            await websocket.send_text(json.dumps(test_message, cls=CustomJSONEncoder))
+            logging.info("Test message sent to WebSocket client")
+        except Exception as e:
+            logging.error(f"Failed to send test message: {str(e)}", exc_info=True)
+        
+        # Keep the connection open and handle messages
+        while True:
+            # Wait for messages from the client (if any)
+            try:
+                data = await websocket.receive_text()
+                logging.debug(f"Received message from client: {data}")
+                # Currently we don't expect any messages from the client
+                # but we could handle them here if needed
+            except WebSocketDisconnect:
+                # Handle disconnection
+                logging.info("WebSocket client disconnected")
+                crew_visualization_listener.disconnect(websocket)
+                break
+    except WebSocketDisconnect:
+        logging.info("WebSocket disconnected during handshake")
+        crew_visualization_listener.disconnect(websocket)
+    except Exception as e:
+        logging.error(f"WebSocket error: {str(e)}", exc_info=True)
+        # Try to disconnect if there was an error
+        try:
+            crew_visualization_listener.disconnect(websocket)
+        except:
+            pass
 
 
 @app.get("/{full_path:path}")

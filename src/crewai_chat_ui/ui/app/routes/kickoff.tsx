@@ -15,6 +15,7 @@ import { useChatStore } from "~/lib/store";
 import { ArrowLeft, Loader2, Moon, Sun } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import ReactMarkdown from "react-markdown";
+import CrewAgentCanvas from "../components/CrewAgentCanvas";
 
 export function meta() {
   return [
@@ -48,6 +49,7 @@ export default function Kickoff() {
   const [inputFields, setInputFields] = useState<InputField[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [isRunningCrew, setIsRunningCrew] = useState(false);
 
   // Fetch available crews on component mount
   useEffect(() => {
@@ -137,6 +139,7 @@ export default function Kickoff() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setIsRunningCrew(true);
 
     // Convert input fields to the expected format
     const inputs: Record<string, string> = {};
@@ -174,6 +177,8 @@ export default function Kickoff() {
       setError("Failed to run crew. Please try again later.");
     } finally {
       setLoading(false);
+      // We don't set isRunningCrew to false here because we want to keep showing the visualization
+      // even after the crew has completed running
     }
   };
 
@@ -312,7 +317,12 @@ export default function Kickoff() {
             </Alert>
           )}
 
-          {!result && !error && (
+          {/* Crew Agent Visualization Canvas */}
+          {selectedCrewId && (
+            <CrewAgentCanvas crewId={selectedCrewId} isRunning={isRunningCrew} />
+          )}
+
+          {!result && !error && !selectedCrewId && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-md">
                 <h2 className="text-2xl font-bold mb-2">Run a Crew Directly</h2>
