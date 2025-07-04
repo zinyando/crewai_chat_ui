@@ -45,6 +45,9 @@ class CrewVisualizationListener(BaseEventListener):
         
     async def connect(self, websocket: WebSocket):
         """Connect a new WebSocket client."""
+        # Capture the running loop so we can schedule updates from sync event callbacks
+        self.loop = asyncio.get_running_loop()
+
         await websocket.accept()
         self.active_connections.append(websocket)
         logger.info(f"WebSocket client connected. Total connections: {len(self.active_connections)}")
@@ -204,7 +207,9 @@ class CrewVisualizationListener(BaseEventListener):
                     }
             
             # Broadcast the update asynchronously
-            asyncio.create_task(self.broadcast_update())
+            # Schedule the broadcast on the main event loop
+            if hasattr(self, "loop"):
+                asyncio.run_coroutine_threadsafe(self.broadcast_update(), self.loop)
         
         @crewai_event_bus.on(AgentExecutionStartedEvent)
         def on_agent_execution_started(source, event):
@@ -227,7 +232,9 @@ class CrewVisualizationListener(BaseEventListener):
                         self.task_states[task_id]["agent_id"] = agent_id
                 
                 # Broadcast the update asynchronously
-                asyncio.create_task(self.broadcast_update())
+                # Schedule the broadcast on the main event loop
+            if hasattr(self, "loop"):
+                asyncio.run_coroutine_threadsafe(self.broadcast_update(), self.loop)
         
         @crewai_event_bus.on(AgentExecutionCompletedEvent)
         def on_agent_execution_completed(source, event):
@@ -249,7 +256,9 @@ class CrewVisualizationListener(BaseEventListener):
                         self.task_states[task_id]["status"] = "completed"
                 
                 # Broadcast the update asynchronously
-                asyncio.create_task(self.broadcast_update())
+                # Schedule the broadcast on the main event loop
+            if hasattr(self, "loop"):
+                asyncio.run_coroutine_threadsafe(self.broadcast_update(), self.loop)
         
         @crewai_event_bus.on(TaskStartedEvent)
         def on_task_started(source, event):
@@ -297,7 +306,9 @@ class CrewVisualizationListener(BaseEventListener):
                         logger.info(f"Associated task '{task_id}' with agent '{agent_name}' (ID: {agent_id})")
                 
                 # Broadcast the update asynchronously
-                asyncio.create_task(self.broadcast_update())
+                # Schedule the broadcast on the main event loop
+            if hasattr(self, "loop"):
+                asyncio.run_coroutine_threadsafe(self.broadcast_update(), self.loop)
         
         @crewai_event_bus.on(TaskCompletedEvent)
         def on_task_completed(source, event):
@@ -311,7 +322,9 @@ class CrewVisualizationListener(BaseEventListener):
                 self.task_states[task_id]["status"] = "completed"
                 
                 # Broadcast the update asynchronously
-                asyncio.create_task(self.broadcast_update())
+                # Schedule the broadcast on the main event loop
+            if hasattr(self, "loop"):
+                asyncio.run_coroutine_threadsafe(self.broadcast_update(), self.loop)
         
         @crewai_event_bus.on(CrewKickoffCompletedEvent)
         def on_crew_kickoff_completed(source, event):
@@ -323,7 +336,9 @@ class CrewVisualizationListener(BaseEventListener):
             self.crew_state["output"] = event.output
             
             # Broadcast the update asynchronously
-            asyncio.create_task(self.broadcast_update())
+            # Schedule the broadcast on the main event loop
+            if hasattr(self, "loop"):
+                asyncio.run_coroutine_threadsafe(self.broadcast_update(), self.loop)
 
 # Create a singleton instance
 crew_visualization_listener = CrewVisualizationListener()
