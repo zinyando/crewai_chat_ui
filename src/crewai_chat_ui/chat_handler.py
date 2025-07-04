@@ -3,6 +3,8 @@ import logging
 from typing import Dict, List, Any, Optional, Union, cast, TypedDict
 import threading
 import time
+import asyncio
+from crewai.utilities.events import crewai_event_bus
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -51,6 +53,60 @@ class ChatHandler:
         self.available_functions: Dict[str, Any] = {}
         self.is_initialized = False
         
+        # Register event listeners
+        from crewai_chat_ui.event_listener import crew_visualization_listener
+        crew_visualization_listener.setup_listeners(crewai_event_bus)
+        
+        # Register agents with visualization listener immediately
+        self._register_agents_with_visualization()
+        
+    def _register_agents_with_visualization(self):
+        """Register agents with the visualization listener as soon as the crew is initialized.
+        This allows the visualization to display agents before the crew starts running.
+        """
+        try:
+            from crewai_chat_ui.event_listener import crew_visualization_listener
+            import uuid
+            
+            # Create a crew ID if not available
+            crew_id = str(uuid.uuid4()) if not hasattr(self.crew, "id") else str(self.crew.id)
+            
+            # Initialize crew state
+            crew_visualization_listener.crew_state = {
+                "id": crew_id,
+                "name": self.crew_name,
+                "status": "initializing",
+            }
+            
+            # Register agents
+            for agent in self.crew.agents:
+                agent_id = str(agent.id) if hasattr(agent, "id") else str(uuid.uuid4())
+                crew_visualization_listener.agent_states[agent_id] = {
+                    "id": agent_id,
+                    "role": agent.role,
+                    "name": agent.name if hasattr(agent, "name") else agent.role,
+                    "status": "initializing",
+                    "description": agent.backstory[:100] + "..." if len(agent.backstory) > 100 else agent.backstory,
+                }
+            
+            # Register tasks if available
+            if hasattr(self.crew, "tasks"):
+                for i, task in enumerate(self.crew.tasks):
+                    task_id = str(task.id) if hasattr(task, "id") else f"task_{i}"
+                    crew_visualization_listener.task_states[task_id] = {
+                        "id": task_id,
+                        "description": task.description,
+                        "status": "pending",
+                        "agent_id": None,
+                    }
+            
+            # We don't need to broadcast updates here - the WebSocket connection will
+            # send the current state when a client connects
+            
+            logging.info(f"Registered {len(self.crew.agents)} agents with visualization listener")
+        except Exception as e:
+            logging.error(f"Error registering agents with visualization listener: {str(e)}", exc_info=True)
+    
     def _initialize_chat_llm(self) -> LLM:
         """Initialize the chat LLM from the crew.
         
