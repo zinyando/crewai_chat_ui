@@ -48,6 +48,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
     tasks: [],
   });
   const [connected, setConnected] = useState(false);
+  const [hasReceivedData, setHasReceivedData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -84,7 +85,22 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
         console.log("WebSocket message received:", event.data);
         const data = JSON.parse(event.data);
         console.log("Parsed WebSocket data:", data);
+        
+        // Check if this is a connection test message
+        if (data.type === 'connection_test') {
+          console.log("Received connection test message, not updating state");
+          return;
+        }
+        
+        // Check if this is real data with agents
+        if (data.agents && Array.isArray(data.agents) && data.agents.length > 0) {
+          console.log("Received real data with agents:", data.agents.length);
+          setHasReceivedData(true);
+        }
+        
+        console.log("Updating state with:", data);
         setState(data);
+        console.log("State after update:", state); // Note: This will show the previous state due to closure
       } catch (err: any) {
         console.error("Error parsing WebSocket message:", err);
         setError(`Error parsing data: ${err.message || 'Unknown error'}`);
@@ -111,8 +127,11 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
     };
   }, [crewId]);
 
-  // Draw the canvas when state changes
+  // Log state changes and debug rendering
   useEffect(() => {
+    console.log("State updated in useEffect:", state);
+    console.log("Agents length:", state?.agents?.length);
+    
     if (!canvasRef.current || !state?.agents?.length) return;
 
     // Canvas drawing logic will be implemented here
@@ -138,6 +157,8 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
   // Always show the component, even if not running
   // This allows us to display agents as soon as they're available
 
+  console.log("Rendering with state:", { connected, hasReceivedData, agentsLength: state?.agents?.length });
+  
   // Show loading if not connected
   if (!connected) {
     return (
@@ -152,8 +173,8 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
     );
   }
   
-  // Show initializing UI if connected but no agents or crew data yet
-  if (!state?.agents?.length && (!state?.crew || Object.keys(state?.crew).length === 0)) {
+  // Show initializing UI if connected but haven't received real data yet
+  if (!hasReceivedData) {
     return (
       <Card className="p-6 mb-6">
         <div className="flex flex-col items-center justify-center h-40">
