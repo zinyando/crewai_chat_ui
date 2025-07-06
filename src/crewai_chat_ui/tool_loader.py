@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Optional, get_type_hints
+from typing import Dict, Any, List, Optional, get_type_hints, cast
 
 
 def is_user_project_file(path):
@@ -201,7 +201,13 @@ def _extract_schema_parameters(schema_class) -> Dict[str, Any]:
     """Extract parameters from a Pydantic schema class."""
     import logging
 
-    parameters = {"type": "object", "properties": {}, "required": []}
+    parameters: Dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+    # Ensure required is a list
+    required_list: List[str] = []
+    # Ensure properties is a dictionary
+    properties_dict: Dict[str, Any] = {}
+    parameters["properties"] = properties_dict
+    parameters["required"] = required_list
 
     try:
         # Try Pydantic v2 first
@@ -210,7 +216,8 @@ def _extract_schema_parameters(schema_class) -> Dict[str, Any]:
             if "properties" in schema_dict:
                 parameters["properties"] = schema_dict["properties"]
             if "required" in schema_dict:
-                parameters["required"] = schema_dict["required"]
+                # Make sure we're assigning a list
+                parameters["required"] = list(schema_dict["required"])
             return parameters
 
         # Try Pydantic v1
@@ -219,7 +226,8 @@ def _extract_schema_parameters(schema_class) -> Dict[str, Any]:
             if "properties" in schema_dict:
                 parameters["properties"] = schema_dict["properties"]
             if "required" in schema_dict:
-                parameters["required"] = schema_dict["required"]
+                # Make sure we're assigning a list
+                parameters["required"] = list(schema_dict["required"])
             return parameters
 
         # Manual extraction using model_fields (Pydantic v2)
@@ -254,9 +262,9 @@ def _extract_schema_parameters(schema_class) -> Dict[str, Any]:
                 # Check if field is required
                 if hasattr(field_info, "default"):
                     if field_info.default is ...:  # Ellipsis indicates required field
-                        parameters["required"].append(field_name)
+                        required_list.append(field_name)
                 else:
-                    parameters["required"].append(field_name)
+                    required_list.append(field_name)
 
         # Manual extraction using __fields__ (Pydantic v1)
         elif hasattr(schema_class, "__fields__"):
@@ -290,7 +298,7 @@ def _extract_schema_parameters(schema_class) -> Dict[str, Any]:
 
                 # Check if field is required
                 if field_info.required:
-                    parameters["required"].append(field_name)
+                    required_list.append(field_name)
 
         else:
             logging.warning(
@@ -308,7 +316,13 @@ def _extract_method_parameters(method) -> Dict[str, Any]:
     import inspect
     from typing import get_type_hints
 
-    parameters = {"type": "object", "properties": {}, "required": []}
+    parameters: Dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+    # Ensure required is a list
+    required_list: List[str] = []
+    # Ensure properties is a dictionary
+    properties_dict: Dict[str, Any] = {}
+    parameters["properties"] = properties_dict
+    parameters["required"] = required_list
 
     try:
         sig = inspect.signature(method)
@@ -334,14 +348,14 @@ def _extract_method_parameters(method) -> Dict[str, Any]:
             elif "dict" in type_name:
                 json_type = "object"
 
-            parameters["properties"][param_name] = {
+            properties_dict[param_name] = {
                 "type": json_type,
                 "description": f"Parameter: {param_name}",
             }
 
             # Check if parameter is required
             if param.default == inspect.Parameter.empty:
-                parameters["required"].append(param_name)
+                required_list.append(param_name)
 
     except Exception as e:
         logging.error(f"Error extracting method parameters: {e}")
