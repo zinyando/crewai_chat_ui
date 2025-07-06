@@ -338,6 +338,78 @@ async def get_available_crews() -> JSONResponse:
     return JSONResponse(content={"status": "success", "crews": discovered_crews})
 
 
+def discover_available_tools():
+    """Discover all available tools from the CrewAI package.
+
+    Returns:
+        List of dictionaries containing tool information:
+            - name: Name of the tool
+            - description: Description of the tool
+            - parameters: Parameters schema of the tool
+    """
+    import inspect
+    import importlib
+    import pkgutil
+    from crewai.tools import BaseTool
+
+    tools_list = []
+
+    # Try to find all modules in crewai.tools package
+    try:
+        import crewai.tools as tools_package
+
+        package_path = tools_package.__path__
+        package_name = tools_package.__name__
+
+        # Discover all modules in the package
+        for _, name, _ in pkgutil.iter_modules(package_path):
+            try:
+                # Import the module
+                module = importlib.import_module(f"{package_name}.{name}")
+
+                # Find all classes in the module that inherit from BaseTool
+                for attr_name in dir(module):
+                    attr = getattr(module, attr_name)
+                    if (
+                        inspect.isclass(attr)
+                        and issubclass(attr, BaseTool)
+                        and attr is not BaseTool
+                    ):
+                        try:
+                            # Create an instance of the tool
+                            tool_instance = attr()
+
+                            # Get tool information
+                            tools_list.append(
+                                {
+                                    "name": tool_instance.name,
+                                    "description": tool_instance.description,
+                                    "parameters": {
+                                        "type": "object",
+                                        "properties": {
+                                            k: {
+                                                "type": "string",
+                                                "description": v.description,
+                                            }
+                                            for k, v in tool_instance.args_schema.model_fields.items()
+                                        },
+                                        "required": [
+                                            k
+                                            for k in tool_instance.args_schema.model_fields.keys()
+                                        ],
+                                    },
+                                }
+                            )
+                        except Exception as e:
+                            print(f"Error instantiating tool {attr_name}: {e}")
+            except Exception as e:
+                print(f"Error importing module {name}: {e}")
+    except Exception as e:
+        print(f"Error discovering tools: {e}")
+
+    return tools_list
+
+
 @app.get("/api/tools")
 async def get_available_tools() -> JSONResponse:
     """Get a list of all available tools from the CrewAI toolkit.
@@ -346,53 +418,17 @@ async def get_available_tools() -> JSONResponse:
         JSONResponse with the list of available tools and their schemas
     """
     try:
-        # Import CrewAI tools module
-        from crewai.tools import tool_registry
+        # Discover available tools
+        tools_list = discover_available_tools()
 
-        # Get all registered tools
-        registered_tools = tool_registry.get_registered_tools()
-
-        # Format tools for the frontend
-        tools_list = []
-        for tool_name, tool_class in registered_tools.items():
-            # Create a tool instance to get its schema
-            try:
-                tool_instance = tool_class()
-                tool_schema = tool_instance.openai_schema
-
-                # Extract relevant information
-                tools_list.append(
-                    {
-                        "name": tool_name,
-                        "description": tool_schema.get(
-                            "description", "No description available"
-                        ),
-                        "parameters": tool_schema.get("parameters", {}),
-                    }
-                )
-            except Exception as e:
-                logging.warning(f"Could not initialize tool {tool_name}: {str(e)}")
-                # Add basic information without schema
-                tools_list.append(
-                    {
-                        "name": tool_name,
-                        "description": "Could not initialize tool",
-                        "parameters": {},
-                    }
-                )
+        if not tools_list:
+            logging.warning("No tools were discovered")
 
         return JSONResponse(content={"status": "success", "tools": tools_list})
-    except ImportError as e:
-        logging.error(f"Error importing CrewAI tools: {str(e)}")
-        return JSONResponse(
-            content={"status": "error", "message": "CrewAI tools module not available"},
-            status_code=500,
-        )
     except Exception as e:
         logging.error(f"Error getting available tools: {str(e)}")
         return JSONResponse(
-            content={"status": "error", "message": f"Error retrieving tools: {str(e)}"},
-            status_code=500,
+            content={"status": "error", "message": str(e)}, status_code=500
         )
 
 
@@ -498,15 +534,6 @@ async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
                 "status": "success",
                 "message": f"Crew '{crew_name}' kickoff started.",
                 "crew_id": crew_id,
-            }
-        )
-
-        return JSONResponse(
-            content={
-                "status": "success",
-                "crew_id": crew_id,
-                "crew_name": crew_name,
-                "result": result,
             }
         )
     except HTTPException as e:
