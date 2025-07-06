@@ -343,9 +343,9 @@ def discover_available_tools():
 
     Returns:
         List of dictionaries containing tool information:
-            - name: Name of the tool
-            - description: Description of the tool
-            - parameters: Parameters schema of the tool
+            - name: Name of the tool class
+            - module: Module path where the tool is defined
+            - class_name: Name of the tool class
     """
     import inspect
     import importlib
@@ -375,33 +375,40 @@ def discover_available_tools():
                         and issubclass(attr, BaseTool)
                         and attr is not BaseTool
                     ):
-                        try:
-                            # Create an instance of the tool
-                            tool_instance = attr()
-
-                            # Get tool information
-                            tools_list.append(
-                                {
-                                    "name": tool_instance.name,
-                                    "description": tool_instance.description,
-                                    "parameters": {
-                                        "type": "object",
-                                        "properties": {
-                                            k: {
-                                                "type": "string",
-                                                "description": v.description,
-                                            }
-                                            for k, v in tool_instance.args_schema.model_fields.items()
-                                        },
-                                        "required": [
-                                            k
-                                            for k in tool_instance.args_schema.model_fields.keys()
-                                        ],
-                                    },
+                        # Get class attributes without instantiating
+                        tool_name = getattr(attr, "name", attr_name) if hasattr(attr, "name") else attr_name
+                        tool_description = getattr(attr, "description", "No description available") if hasattr(attr, "description") else "No description available"
+                        
+                        # Extract parameter information from annotations if available
+                        parameters = {}
+                        if hasattr(attr, "_run"):
+                            run_method = getattr(attr, "_run")
+                            if hasattr(run_method, "__annotations__"):
+                                annotations = run_method.__annotations__
+                                properties = {}
+                                required = []
+                                
+                                for param_name, param_type in annotations.items():
+                                    if param_name != "return" and param_name != "self":
+                                        properties[param_name] = {
+                                            "type": str(param_type.__name__) if hasattr(param_type, "__name__") else "string",
+                                            "description": f"Parameter: {param_name}"
+                                        }
+                                        required.append(param_name)
+                                
+                                parameters = {
+                                    "type": "object",
+                                    "properties": properties,
+                                    "required": required
                                 }
-                            )
-                        except Exception as e:
-                            print(f"Error instantiating tool {attr_name}: {e}")
+                        
+                        tools_list.append({
+                            "name": tool_name,
+                            "description": tool_description,
+                            "parameters": parameters,
+                            "module": f"{package_name}.{name}",
+                            "class_name": attr_name
+                        })
             except Exception as e:
                 print(f"Error importing module {name}: {e}")
     except Exception as e:
@@ -444,30 +451,41 @@ async def execute_tool(tool_name: str, request: ToolExecuteRequest) -> JSONRespo
         JSONResponse with the tool execution results
     """
     try:
-        # Import CrewAI tools module
-        from crewai.tools import tool_registry
-
-        # Get the tool class
-        registered_tools = tool_registry.get_registered_tools()
-        if tool_name not in registered_tools:
+        # Get all available tools
+        tools = discover_available_tools()
+        
+        # Find the requested tool
+        tool_info = None
+        for tool in tools:
+            if tool["name"] == tool_name:
+                tool_info = tool
+                break
+                
+        if not tool_info:
             return JSONResponse(
                 content={"status": "error", "message": f"Tool '{tool_name}' not found"},
                 status_code=404,
             )
-
+        
+        # Import the tool class dynamically
+        module_path = tool_info["module"]
+        class_name = tool_info["class_name"]
+        
+        module = __import__(module_path, fromlist=[class_name])
+        tool_class = getattr(module, class_name)
+        
         # Create a tool instance
-        tool_class = registered_tools[tool_name]
         tool_instance = tool_class()
-
+        
         # Execute the tool with the provided inputs
         inputs = request.inputs or {}
         result = tool_instance._run(**inputs)
-
+        
         return JSONResponse(content={"status": "success", "result": result})
     except ImportError as e:
-        logging.error(f"Error importing CrewAI tools: {str(e)}")
+        logging.error(f"Error importing tool module: {str(e)}")
         return JSONResponse(
-            content={"status": "error", "message": "CrewAI tools module not available"},
+            content={"status": "error", "message": f"Error importing tool module: {str(e)}"},
             status_code=500,
         )
     except Exception as e:
