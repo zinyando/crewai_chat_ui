@@ -90,6 +90,7 @@ interface VisualizationState {
 interface CrewAgentCanvasProps {
   crewId: string;
   isRunning: boolean;
+  resetKey?: number; // Key that changes to trigger state reset
 }
 
 // Helper function for status colors
@@ -337,6 +338,7 @@ const nodeTypes: NodeTypes = {
 const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
   crewId,
   isRunning,
+  resetKey = 0,
 }) => {
   // WebSocket reference
   const wsRef = useRef<WebSocket | null>(null);
@@ -462,6 +464,19 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       }
     };
   }, [crewId]);
+
+  // Reset state when resetKey changes
+  useEffect(() => {
+    if (resetKey > 0) {
+      setState({
+        crew: null,
+        agents: [],
+        tasks: [],
+      });
+      setHasReceivedData(false);
+      setError(null);
+    }
+  }, [resetKey]);
 
   // Update nodes and edges when state changes
   useEffect(() => {

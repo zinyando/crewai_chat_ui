@@ -50,6 +50,16 @@ export default function Kickoff() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [isRunningCrew, setIsRunningCrew] = useState(false);
+  const [resetKey, setResetKey] = useState(0); // Key to trigger reset in CrewAgentCanvas
+
+  // Reset state on page load/refresh
+  useEffect(() => {
+    // Reset all state on component mount (page load/refresh)
+    setIsRunningCrew(false);
+    setResult(null);
+    setError(null);
+    setResetKey(1); // Set to 1 on initial load to trigger reset
+  }, []);
 
   // Fetch available crews on component mount
   useEffect(() => {
@@ -140,6 +150,7 @@ export default function Kickoff() {
     setError(null);
     setResult(null);
     setIsRunningCrew(true);
+    setResetKey(prev => prev + 1); // Increment reset key to trigger state reset
 
     // Convert input fields to the expected format
     const inputs: Record<string, string> = {};
@@ -311,7 +322,11 @@ export default function Kickoff() {
 
           {/* Crew Agent Visualization Canvas */}
           {selectedCrewId && (
-            <CrewAgentCanvas crewId={selectedCrewId} isRunning={isRunningCrew} />
+            <CrewAgentCanvas 
+            crewId={selectedCrewId} 
+            isRunning={isRunningCrew} 
+            resetKey={resetKey}
+          />
           )}
 
           {!error && !selectedCrewId && (
