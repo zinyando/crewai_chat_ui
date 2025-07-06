@@ -82,16 +82,16 @@ export default function Landing() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
           {/* Chat Mode Card */}
-          <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card">
+          <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card flex flex-col h-full">
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 mx-auto">
               <MessageSquare className="h-8 w-8 text-primary" />
             </div>
             <h3 className="text-2xl font-bold mb-4 text-center">Chat Mode</h3>
-            <p className="mb-6 text-center">
+            <p className="text-center flex-grow">
               Have a natural conversation with the AI crew. Ask questions and
               get detailed responses through an interactive chat interface.
             </p>
-            <div className="flex justify-center">
+            <div className="flex justify-center mt-6 pt-2">
               <Button onClick={handleChatMode} className="w-full" size="lg">
                 Start Chatting
               </Button>
@@ -99,18 +99,18 @@ export default function Landing() {
           </div>
 
           {/* Kickoff Mode Card */}
-          <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card">
+          <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card flex flex-col h-full">
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 mx-auto">
               <Zap className="h-8 w-8 text-primary" />
             </div>
             <h3 className="text-2xl font-bold mb-4 text-center">
               Kickoff Mode
             </h3>
-            <p className="mb-6 text-center">
+            <p className="text-center flex-grow">
               Provide specific inputs to run the crew directly. Get results
               faster by specifying exactly what you need.
             </p>
-            <div className="flex justify-center">
+            <div className="flex justify-center mt-6 pt-2">
               <Button onClick={handleKickoffMode} className="w-full" size="lg">
                 Start Kickoff
               </Button>
@@ -118,17 +118,17 @@ export default function Landing() {
           </div>
 
           {/* Tools Mode Card */}
-          <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card">
+          <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card flex flex-col h-full">
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 mx-auto">
               <Wrench className="h-8 w-8 text-primary" />
             </div>
             <h3 className="text-2xl font-bold mb-4 text-center">Tools</h3>
-            <p className="mb-6 text-center">
+            <p className="text-center flex-grow">
               Test your CrewAI tools individually. Select a tool, provide
               inputs, and see the results directly without running the entire
               crew.
             </p>
-            <div className="flex justify-center">
+            <div className="flex justify-center mt-6 pt-2">
               <Button onClick={handleToolsMode} className="w-full" size="lg">
                 Test Tools
               </Button>
