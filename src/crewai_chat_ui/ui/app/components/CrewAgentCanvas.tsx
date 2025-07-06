@@ -3,13 +3,14 @@ import { Card } from "../components/ui/card";
 import { Loader2 } from "lucide-react";
 import {
   ReactFlow,
-  Controls,
-  Background,
-  MiniMap,
   useNodesState,
   useEdgesState,
+  Background,
+  Controls,
+  MiniMap,
   Position,
   MarkerType,
+  ConnectionLineType,
 } from "@xyflow/react";
 import type { Node, Edge, NodeTypes, NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -347,9 +348,11 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
   const [hasReceivedData, setHasReceivedData] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // React Flow state
-  const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
+  // React Flow state - Initialize with typed arrays to help TypeScript inference
+  const initialNodes: Node[] = [];
+  const initialEdges: Edge[] = [];
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   // Connect to WebSocket when component mounts or crewId changes
   useEffect(() => {
@@ -479,12 +482,12 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
   // Update nodes and edges when state changes
   useEffect(() => {
-    if (!state?.crew && state.agents.length === 0) return;
+    console.log("Updating nodes and edges with state:", state);
 
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
 
-    // 1. Crew node -----------------------------------------------------------
+    // 1. Crew node
     if (state.crew) {
       const crewNode: Node = {
         id: `crew-${state.crew.id}`,
@@ -496,70 +499,155 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
           started_at: state.crew.started_at,
           completed_at: state.crew.completed_at,
           output: state.crew.output,
-          type: state.crew.type,
-          execution_order: state.crew.execution_order,
-        } as CrewNodeData,
+          type: state.crew.type || "sequential",
+          execution_order: state.crew.execution_order || [],
+        },
         position: { x: 0, y: 50 },
         draggable: true,
         sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        connectable: true,
       };
       newNodes.push(crewNode);
+      console.log("Added crew node:", crewNode.id);
     }
 
-    // 2. Work out agent order ----------------------------------------------
-    const orderedAgents: Agent[] = state.crew?.execution_order?.length
-      ? state.crew.execution_order
-          .map((aid) => state.agents.find((a) => a.id === aid)!)
-          .filter(Boolean)
-      : [...state.agents];
+    // 2. Create agent nodes in vertical layout
+    const sortedAgents = [...state.agents].sort((a, b) => {
+      const aFirstTask = state.tasks.find((t) => t.agent_id === a.id);
+      const bFirstTask = state.tasks.find((t) => t.agent_id === b.id);
 
-    // 3. Agent nodes ---------------------------------------------------------
-    orderedAgents.forEach((agent, idx) => {
+      if (aFirstTask && bFirstTask) {
+        return (
+          state.tasks.indexOf(aFirstTask) - state.tasks.indexOf(bFirstTask)
+        );
+      }
+
+      if (aFirstTask && !bFirstTask) return -1;
+      if (!aFirstTask && bFirstTask) return 1;
+
+      return state.agents.indexOf(a) - state.agents.indexOf(b);
+    });
+
+    sortedAgents.forEach((agent, idx) => {
       const yPos = 200 + idx * 150;
-      const agentTasks = state.tasks.filter((t) => t.agent_id === agent.id);
+      const associatedTasks = state.tasks.filter(
+        (t) => t.agent_id === agent.id
+      );
 
-      newNodes.push({
+      const agentNode: Node = {
         id: `agent-${agent.id}`,
         type: "agent",
         data: {
-          ...agent,
-          associatedTasks: agentTasks,
-        } as AgentNodeData,
+          id: agent.id,
+          name: agent.name,
+          role: agent.role,
+          status: agent.status,
+          description: agent.description,
+          associatedTasks: associatedTasks,
+        },
         position: { x: 0, y: yPos },
         draggable: true,
         sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
-      });
+        connectable: true,
+      };
+
+      newNodes.push(agentNode);
+      console.log(
+        "Added agent node:",
+        agentNode.id,
+        "at position",
+        agentNode.position
+      );
     });
 
-    // 4. Edges ---------------------------------------------------------------
-    if (state.crew && orderedAgents.length) {
-      newEdges.push({
-        id: `edge-crew-${state.crew.id}-${orderedAgents[0].id}`,
+    // 3. Create edges
+    console.log("Creating edges...");
+
+    // Connect crew to first agent
+    if (state.crew && sortedAgents.length > 0) {
+      const firstAgent = sortedAgents[0];
+      const crewToAgentEdge: Edge = {
+        id: `crew-to-agent-${firstAgent.id}`,
         source: `crew-${state.crew.id}`,
-        target: `agent-${orderedAgents[0].id}`,
-        type: "straight",
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { strokeWidth: 1, stroke: "#666", strokeDasharray: "5 5" },
-        animated: false,
-      });
+        target: `agent-${firstAgent.id}`,
+        type: "default", // Use default edge type instead of smoothstep
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#6b7280",
+        },
+        style: {
+          strokeWidth: 2,
+          stroke: "#6b7280",
+        },
+      };
+      newEdges.push(crewToAgentEdge);
+      console.log("Added crew-to-agent edge:", crewToAgentEdge.id);
     }
 
-    for (let i = 0; i < orderedAgents.length - 1; i++) {
-      newEdges.push({
-        id: `edge-${orderedAgents[i].id}-${orderedAgents[i + 1].id}`,
-        source: `agent-${orderedAgents[i].id}`,
-        target: `agent-${orderedAgents[i + 1].id}`,
-        type: "straight",
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { strokeWidth: 1, stroke: "#666", strokeDasharray: "5 5" },
-        animated: false,
-      });
+    // Connect agents in sequence
+    for (let i = 0; i < sortedAgents.length - 1; i++) {
+      const currentAgent = sortedAgents[i];
+      const nextAgent = sortedAgents[i + 1];
+
+      const sourceId = `agent-${currentAgent.id}`;
+      const targetId = `agent-${nextAgent.id}`;
+
+      // Determine edge color based on current agent status
+      let edgeColor = "#6b7280"; // default gray
+      let animated = false;
+
+      if (currentAgent.status === "completed") {
+        edgeColor = "#10b981"; // green for completed
+      } else if (currentAgent.status === "running") {
+        edgeColor = "#f59e0b"; // orange for running
+        animated = true;
+      }
+
+      const agentEdge: Edge = {
+        id: `agent-${currentAgent.id}-to-${nextAgent.id}`,
+        source: sourceId,
+        target: targetId,
+        type: "default", // Use default edge type
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: edgeColor,
+        },
+        style: {
+          strokeWidth: 2,
+          stroke: edgeColor,
+        },
+        animated: animated,
+      };
+
+      newEdges.push(agentEdge);
+      console.log("Added agent-to-agent edge:", agentEdge.id);
     }
 
+    // Log final counts
+    console.log("Final node count:", newNodes.length);
+    console.log("Final edge count:", newEdges.length);
+
+    // Debug: Log all node and edge IDs
+    console.log(
+      "Node IDs:",
+      newNodes.map((n) => n.id)
+    );
+    console.log(
+      "Edge details:",
+      newEdges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: e.type,
+      }))
+    );
+
+    // Update nodes and edges using the setter functions
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [state]);
+  }, [state, setNodes, setEdges]);
 
   return (
     <Card className="p-6 mb-6 overflow-hidden">
@@ -590,8 +678,11 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
         <div className="mb-4 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs">
           <p>WebSocket connected: {connected ? "Yes" : "No"}</p>
           <p>Has received data: {hasReceivedData ? "Yes" : "No"}</p>
+          <p>Crew: {state?.crew?.name || "None"}</p>
           <p>Agents: {state?.agents?.length || 0}</p>
           <p>Tasks: {state?.tasks?.length || 0}</p>
+          <p>Nodes: {nodes.length}</p>
+          <p>Edges: {edges.length}</p>
           <p>
             Running agents:{" "}
             {state?.agents?.filter((a) => a.status === "running").length || 0}
@@ -616,7 +707,17 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             fitView
+            fitViewOptions={{ padding: 0.2 }}
             attributionPosition="bottom-right"
+            defaultEdgeOptions={{
+              type: "default",
+              markerEnd: { type: MarkerType.ArrowClosed },
+            }}
+            connectionLineType={ConnectionLineType.SmoothStep}
+            proOptions={{ hideAttribution: true }}
+            minZoom={0.5}
+            maxZoom={1.5}
+            elementsSelectable={true}
           >
             <Background color="#aaa" gap={16} />
             <Controls />
