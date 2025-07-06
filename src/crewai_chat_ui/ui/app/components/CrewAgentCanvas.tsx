@@ -534,6 +534,10 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       return state.agents.indexOf(a) - state.agents.indexOf(b);
     });
 
+    // Agent nodes are 208px (w-52) wide, crew node is 256px (w-64).
+    // To center agents under the crew node, we offset them by half the difference.
+    const agentXOffset = (256 - 208) / 2;
+
     sortedAgents.forEach((agent, index) => {
       const yPos = 200 + index * 150;
       const associatedTasks = state.tasks.filter(
@@ -553,7 +557,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
           isFirst: index === 0,
           isLast: index === sortedAgents.length - 1,
         },
-        position: { x: 0, y: yPos },
+        position: { x: agentXOffset, y: yPos },
         draggable: true,
         sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
