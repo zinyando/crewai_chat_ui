@@ -203,13 +203,13 @@ export default function Tools() {
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto p-6">
           {selectedTool ? (
-            <div>
+            <div className="max-w-3xl mx-auto bg-card rounded-lg shadow-sm p-6 border">
               <h2 className="text-2xl font-bold mb-2">{selectedTool.name}</h2>
               <p className="text-muted-foreground mb-6">
                 {selectedTool.description}
               </p>
 
-              <div className="space-y-6">
+              <div className="space-y-6 bg-muted/30 p-6 rounded-lg border">
                 <h3 className="text-lg font-semibold">Parameters</h3>
                 {selectedTool.parameters &&
                 selectedTool.parameters.properties ? (
@@ -217,7 +217,7 @@ export default function Tools() {
                     {Object.entries(selectedTool.parameters.properties).map(
                       ([paramName, paramDetails]) => (
                         <div key={paramName} className="space-y-2">
-                          <Label htmlFor={paramName}>
+                          <Label htmlFor={paramName} className="text-base font-medium">
                             {paramName}
                             {selectedTool.parameters.required?.includes(
                               paramName
@@ -266,11 +266,12 @@ export default function Tools() {
                   </p>
                 )}
 
-                <Button
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="w-full md:w-auto"
-                >
+                <div className="flex justify-center mt-8">
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    className="px-8"
+                  >
                   {loading ? (
                     <>
                       <span className="animate-spin mr-2">⏳</span>
@@ -279,7 +280,8 @@ export default function Tools() {
                   ) : (
                     "Execute Tool"
                   )}
-                </Button>
+                  </Button>
+                </div>
 
                 {error && (
                   <Alert variant="destructive" className="mt-4">
@@ -288,9 +290,9 @@ export default function Tools() {
                 )}
 
                 {result && (
-                  <div className="mt-6">
-                    <h3 className="text-lg font-semibold mb-2">Result</h3>
-                    <div className="bg-muted p-4 rounded-md overflow-auto max-h-96">
+                  <div className="mt-8 bg-muted/50 p-6 rounded-lg border">
+                    <h3 className="text-lg font-semibold mb-4">Result</h3>
+                    <div className="bg-background p-4 rounded-md overflow-auto max-h-96 border">
                       <pre className="text-sm whitespace-pre-wrap">
                         {result}
                       </pre>
@@ -300,8 +302,8 @@ export default function Tools() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-64">
-              <p className="text-muted-foreground">
+            <div className="flex flex-col items-center justify-center h-64 max-w-3xl mx-auto bg-card rounded-lg shadow-sm p-6 border">
+              <p className="text-muted-foreground text-lg">
                 {loading
                   ? "Loading tools..."
                   : "Select a tool from the sidebar"}
