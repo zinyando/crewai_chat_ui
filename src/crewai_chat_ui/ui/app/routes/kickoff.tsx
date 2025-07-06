@@ -159,16 +159,8 @@ export default function Kickoff() {
       const data = await response.json();
 
       if (data.status === "success") {
-        // Handle nested result structure
-        if (data.result && typeof data.result === "object") {
-          if (data.result.status === "success") {
-            setResult(data.result.result);
-          } else {
-            setError(data.result.detail || "Failed to run crew");
-          }
-        } else {
-          setResult(data.result);
-        }
+        // The result will be displayed by the CrewAgentCanvas component
+        // via the WebSocket connection, so we don't need to handle it here
       } else {
         setError(data.detail || "Failed to run crew");
       }
@@ -322,7 +314,7 @@ export default function Kickoff() {
             <CrewAgentCanvas crewId={selectedCrewId} isRunning={isRunningCrew} />
           )}
 
-          {!result && !error && !selectedCrewId && (
+          {!error && !selectedCrewId && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-md">
                 <h2 className="text-2xl font-bold mb-2">Run a Crew Directly</h2>
@@ -339,83 +331,7 @@ export default function Kickoff() {
             </div>
           )}
 
-          {result && (
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl font-bold mb-6">Result</h2>
-              <div className="p-6 rounded-lg border bg-card overflow-auto">
-                <div className="text-base leading-7">
-                  <ReactMarkdown
-                    components={{
-                      h1: ({ node, ...props }) => (
-                        <h1
-                          className="text-2xl font-bold mt-6 mb-4"
-                          {...props}
-                        />
-                      ),
-                      h2: ({ node, ...props }) => (
-                        <h2
-                          className="text-xl font-bold mt-5 mb-3"
-                          {...props}
-                        />
-                      ),
-                      h3: ({ node, ...props }) => (
-                        <h3
-                          className="text-lg font-bold mt-4 mb-2"
-                          {...props}
-                        />
-                      ),
-                      p: ({ node, ...props }) => (
-                        <p className="mb-4" {...props} />
-                      ),
-                      ul: ({ node, ...props }) => (
-                        <ul className="list-disc pl-6 mb-4" {...props} />
-                      ),
-                      ol: ({ node, ...props }) => (
-                        <ol className="list-decimal pl-6 mb-4" {...props} />
-                      ),
-                      li: ({ node, ...props }) => (
-                        <li className="mb-1" {...props} />
-                      ),
-                      a: ({ node, ...props }) => (
-                        <a
-                          className="text-blue-500 hover:underline"
-                          {...props}
-                        />
-                      ),
-                      blockquote: ({ node, ...props }) => (
-                        <blockquote
-                          className="border-l-4 border-muted pl-4 italic my-4"
-                          {...props}
-                        />
-                      ),
-                      code: ({ node, children, className, ...props }: any) => {
-                        const match = /language-(\w+)/.exec(className || "");
-                        const isInline =
-                          !match && !children?.toString().includes("\n");
-                        return isInline ? (
-                          <code
-                            className="bg-muted px-1 py-0.5 rounded"
-                            {...props}
-                          >
-                            {children}
-                          </code>
-                        ) : (
-                          <code
-                            className="block bg-muted p-2 rounded my-4 overflow-x-auto"
-                            {...props}
-                          >
-                            {children}
-                          </code>
-                        );
-                      },
-                    }}
-                  >
-                    {result}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Results are now displayed in the CrewAgentCanvas component */}
         </main>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Card } from "../components/ui/card";
 import { Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import {
   ReactFlow,
   useNodesState,
@@ -614,7 +615,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       {/* React Flow Canvas */}
       {(hasReceivedData || !isRunning) && (
         <div
-          className="h-[600px] border rounded-md overflow-hidden"
+          className="h-[600px] border rounded-md overflow-hidden mb-6"
           ref={canvasRef}
         >
           <ReactFlow
@@ -640,6 +641,86 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
             <Controls />
             <MiniMap nodeStrokeWidth={3} zoomable pannable />
           </ReactFlow>
+        </div>
+      )}
+
+      {/* Crew Results Section */}
+      {state.crew?.status === "completed" && state.crew?.output && (
+        <div className="mt-4">
+          <h3 className="text-lg font-semibold mb-4">Crew Results</h3>
+          <div className="p-6 rounded-lg border bg-card overflow-auto">
+            <div className="text-base leading-7">
+              <ReactMarkdown
+                components={{
+                  h1: ({ ...props }) => (
+                    <h1
+                      className="text-2xl font-bold mt-6 mb-4"
+                      {...props}
+                    />
+                  ),
+                  h2: ({ ...props }) => (
+                    <h2
+                      className="text-xl font-bold mt-5 mb-3"
+                      {...props}
+                    />
+                  ),
+                  h3: ({ ...props }) => (
+                    <h3
+                      className="text-lg font-bold mt-4 mb-2"
+                      {...props}
+                    />
+                  ),
+                  p: ({ ...props }) => (
+                    <p className="mb-4" {...props} />
+                  ),
+                  ul: ({ ...props }) => (
+                    <ul className="list-disc pl-6 mb-4" {...props} />
+                  ),
+                  ol: ({ ...props }) => (
+                    <ol className="list-decimal pl-6 mb-4" {...props} />
+                  ),
+                  li: ({ ...props }) => (
+                    <li className="mb-1" {...props} />
+                  ),
+                  a: ({ ...props }) => (
+                    <a
+                      className="text-blue-500 hover:underline"
+                      {...props}
+                    />
+                  ),
+                  blockquote: ({ ...props }) => (
+                    <blockquote
+                      className="border-l-4 border-muted pl-4 italic my-4"
+                      {...props}
+                    />
+                  ),
+                  code: ({ children, className, ...props }: any) => {
+                    const match = /language-(\w+)/.exec(className || "");
+                    const isInline =
+                      !match && !children?.toString().includes("\n");
+                    return isInline ? (
+                      <code
+                        className="bg-muted px-1 py-0.5 rounded"
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    ) : (
+                      <pre
+                        className="bg-muted p-4 rounded-md overflow-x-auto mb-4"
+                      >
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      </pre>
+                    );
+                  },
+                }}
+              >
+                {state.crew.output}
+              </ReactMarkdown>
+            </div>
+          </div>
         </div>
       )}
     </Card>
