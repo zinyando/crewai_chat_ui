@@ -5,7 +5,7 @@ import sys
 import datetime
 from pathlib import Path
 import threading
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
@@ -338,83 +338,296 @@ async def get_available_crews() -> JSONResponse:
     return JSONResponse(content={"status": "success", "crews": discovered_crews})
 
 
-def discover_available_tools():
-    """Discover all available tools from the CrewAI package.
-
-    Returns:
-        List of dictionaries containing tool information:
-            - name: Name of the tool class
-            - module: Module path where the tool is defined
-            - class_name: Name of the tool class
-    """
+def discover_available_tools(directory: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """Discover all available tools from the local 'tools' directory."""
     import inspect
     import importlib
-    import pkgutil
-    from crewai.tools import BaseTool
+    import logging
+    from pathlib import Path
+    from typing import get_type_hints, Dict, Any, List, Optional
+
+    # Try different import paths for BaseTool
+    BaseTool = None
+    try:
+        from crewai.tools import BaseTool
+    except ImportError:
+        try:
+            from crewai_tools import BaseTool
+        except ImportError:
+            try:
+                from crewai.tools.base_tool import BaseTool
+            except ImportError:
+                logging.error(
+                    "BaseTool not found. Please ensure crewai is installed correctly."
+                )
+                return []
 
     tools_list = []
+    # Correctly locate the 'tools' directory relative to this server.py file
+    search_dir = directory or Path(__file__).parent / "tools"
 
-    # Try to find all modules in crewai.tools package
-    try:
-        import crewai.tools as tools_package
+    if not search_dir.exists() or not search_dir.is_dir():
+        logging.warning(f"Tools directory not found at {search_dir}")
+        return []
 
-        package_path = tools_package.__path__
-        package_name = tools_package.__name__
+    for file_path in search_dir.glob("*.py"):
+        if file_path.name.startswith("__"):
+            continue
 
-        # Discover all modules in the package
-        for _, name, _ in pkgutil.iter_modules(package_path):
-            try:
-                # Import the module
-                module = importlib.import_module(f"{package_name}.{name}")
+        module_name = f"crewai_chat_ui.tools.{file_path.stem}"
+        try:
+            module = importlib.import_module(module_name)
+            for attr_name in dir(module):
+                if attr_name.startswith("_"):
+                    continue
 
-                # Find all classes in the module that inherit from BaseTool
-                for attr_name in dir(module):
-                    attr = getattr(module, attr_name)
-                    if (
-                        inspect.isclass(attr)
-                        and issubclass(attr, BaseTool)
-                        and attr is not BaseTool
-                    ):
-                        # Get class attributes without instantiating
-                        tool_name = getattr(attr, "name", attr_name) if hasattr(attr, "name") else attr_name
-                        tool_description = getattr(attr, "description", "No description available") if hasattr(attr, "description") else "No description available"
-                        
-                        # Extract parameter information from annotations if available
-                        parameters = {}
-                        if hasattr(attr, "_run"):
-                            run_method = getattr(attr, "_run")
-                            if hasattr(run_method, "__annotations__"):
-                                annotations = run_method.__annotations__
-                                properties = {}
-                                required = []
-                                
-                                for param_name, param_type in annotations.items():
-                                    if param_name != "return" and param_name != "self":
-                                        properties[param_name] = {
-                                            "type": str(param_type.__name__) if hasattr(param_type, "__name__") else "string",
-                                            "description": f"Parameter: {param_name}"
-                                        }
-                                        required.append(param_name)
-                                
-                                parameters = {
-                                    "type": "object",
-                                    "properties": properties,
-                                    "required": required
-                                }
-                        
-                        tools_list.append({
-                            "name": tool_name,
-                            "description": tool_description,
-                            "parameters": parameters,
-                            "module": f"{package_name}.{name}",
-                            "class_name": attr_name
-                        })
-            except Exception as e:
-                print(f"Error importing module {name}: {e}")
-    except Exception as e:
-        print(f"Error discovering tools: {e}")
+                attr = getattr(module, attr_name)
+                tool_info = None
+
+                # Class-based tools (BaseTool subclasses)
+                if (
+                    inspect.isclass(attr)
+                    and BaseTool is not None
+                    and issubclass(attr, BaseTool)
+                    and attr is not BaseTool
+                ):
+
+                    tool_info = _extract_class_tool_info(attr, attr_name, module_name)
+
+                # Function-based tools (decorated with @tool)
+                elif inspect.isfunction(attr) and hasattr(attr, "_crewai_tool"):
+
+                    tool_info = _extract_function_tool_info(
+                        attr, attr_name, module_name
+                    )
+
+                if tool_info:
+                    tools_list.append(tool_info)
+
+        except Exception as e:
+            logging.error(f"Error discovering tools in {file_path}: {e}")
 
     return tools_list
+
+
+def _extract_class_tool_info(
+    tool_class, attr_name: str, module_name: str
+) -> Dict[str, Any]:
+    """Extract tool information from a BaseTool subclass."""
+
+    # Get tool name - try multiple ways
+    tool_name = attr_name
+    if hasattr(tool_class, "name"):
+        tool_name = tool_class.name
+    elif hasattr(tool_class, "model_fields") and "name" in tool_class.model_fields:
+        name_field = tool_class.model_fields["name"]
+        if hasattr(name_field, "default") and name_field.default is not None:
+            tool_name = name_field.default
+
+    # Get tool description
+    tool_description = "No description available"
+    if hasattr(tool_class, "description"):
+        tool_description = tool_class.description
+    elif (
+        hasattr(tool_class, "model_fields") and "description" in tool_class.model_fields
+    ):
+        desc_field = tool_class.model_fields["description"]
+        if hasattr(desc_field, "default") and desc_field.default is not None:
+            tool_description = desc_field.default
+    elif tool_class.__doc__:
+        tool_description = tool_class.__doc__.strip()
+
+    # Extract parameters from args_schema
+    parameters = {"type": "object", "properties": {}, "required": []}
+
+    if hasattr(tool_class, "args_schema") and tool_class.args_schema is not None:
+        parameters = _extract_schema_parameters(tool_class.args_schema)
+    else:
+        # Fallback: try to extract from _run method signature
+        if hasattr(tool_class, "_run"):
+            parameters = _extract_method_parameters(tool_class._run)
+
+    return {
+        "name": tool_name,
+        "description": tool_description.strip(),
+        "parameters": parameters,
+        "module": module_name,
+        "class_name": attr_name,
+        "is_class": True,
+    }
+
+
+def _extract_function_tool_info(
+    tool_func, attr_name: str, module_name: str
+) -> Dict[str, Any]:
+    """Extract tool information from a function decorated with @tool."""
+
+    tool_name = getattr(tool_func, "name", attr_name)
+    tool_description = (tool_func.__doc__ or "No description available").strip()
+
+    # Extract parameters from function signature
+    parameters = _extract_method_parameters(tool_func)
+
+    return {
+        "name": tool_name,
+        "description": tool_description,
+        "parameters": parameters,
+        "module": module_name,
+        "class_name": attr_name,
+        "is_class": False,
+    }
+
+
+def _extract_schema_parameters(schema_class) -> Dict[str, Any]:
+    """Extract parameters from a Pydantic schema class."""
+    import logging
+
+    parameters = {"type": "object", "properties": {}, "required": []}
+
+    try:
+        # Try Pydantic v2 first
+        if hasattr(schema_class, "model_json_schema"):
+            schema_dict = schema_class.model_json_schema()
+            if "properties" in schema_dict:
+                parameters["properties"] = schema_dict["properties"]
+            if "required" in schema_dict:
+                parameters["required"] = schema_dict["required"]
+            return parameters
+
+        # Try Pydantic v1
+        elif hasattr(schema_class, "schema"):
+            schema_dict = schema_class.schema()
+            if "properties" in schema_dict:
+                parameters["properties"] = schema_dict["properties"]
+            if "required" in schema_dict:
+                parameters["required"] = schema_dict["required"]
+            return parameters
+
+        # Manual extraction using model_fields (Pydantic v2)
+        elif hasattr(schema_class, "model_fields"):
+            for field_name, field_info in schema_class.model_fields.items():
+                field_type = "string"  # default
+                field_desc = f"Parameter: {field_name}"
+
+                # Get field type
+                if hasattr(field_info, "annotation"):
+                    annotation = field_info.annotation
+                    if hasattr(annotation, "__name__"):
+                        type_name = annotation.__name__.lower()
+                        if "int" in type_name:
+                            field_type = "integer"
+                        elif "float" in type_name:
+                            field_type = "number"
+                        elif "bool" in type_name:
+                            field_type = "boolean"
+                        elif "list" in type_name:
+                            field_type = "array"
+
+                # Get field description
+                if hasattr(field_info, "description") and field_info.description:
+                    field_desc = field_info.description
+
+                parameters["properties"][field_name] = {
+                    "type": field_type,
+                    "description": field_desc,
+                }
+
+                # Check if field is required
+                if hasattr(field_info, "default"):
+                    if field_info.default is ...:  # Ellipsis indicates required field
+                        parameters["required"].append(field_name)
+                else:
+                    parameters["required"].append(field_name)
+
+        # Manual extraction using __fields__ (Pydantic v1)
+        elif hasattr(schema_class, "__fields__"):
+            for field_name, field_info in schema_class.__fields__.items():
+                field_type = "string"  # default
+                field_desc = f"Parameter: {field_name}"
+
+                # Get field type
+                if hasattr(field_info, "type_"):
+                    type_name = getattr(field_info.type_, "__name__", "").lower()
+                    if "int" in type_name:
+                        field_type = "integer"
+                    elif "float" in type_name:
+                        field_type = "number"
+                    elif "bool" in type_name:
+                        field_type = "boolean"
+                    elif "list" in type_name:
+                        field_type = "array"
+
+                # Get field description
+                if hasattr(field_info, "field_info") and hasattr(
+                    field_info.field_info, "description"
+                ):
+                    if field_info.field_info.description:
+                        field_desc = field_info.field_info.description
+
+                parameters["properties"][field_name] = {
+                    "type": field_type,
+                    "description": field_desc,
+                }
+
+                # Check if field is required
+                if field_info.required:
+                    parameters["required"].append(field_name)
+
+        else:
+            logging.warning(
+                f"Could not extract schema from {schema_class.__name__}: unsupported schema format"
+            )
+
+    except Exception as e:
+        logging.error(f"Error extracting schema from {schema_class.__name__}: {e}")
+
+    return parameters
+
+
+def _extract_method_parameters(method) -> Dict[str, Any]:
+    """Extract parameters from a method signature."""
+    import inspect
+    from typing import get_type_hints
+
+    parameters = {"type": "object", "properties": {}, "required": []}
+
+    try:
+        sig = inspect.signature(method)
+        annotations = get_type_hints(method)
+
+        for param_name, param in sig.parameters.items():
+            if param_name == "self":
+                continue
+
+            # Determine parameter type
+            param_type = annotations.get(param_name, str)
+            type_name = getattr(param_type, "__name__", "string").lower()
+
+            json_type = "string"  # default
+            if "int" in type_name:
+                json_type = "integer"
+            elif "float" in type_name:
+                json_type = "number"
+            elif "bool" in type_name:
+                json_type = "boolean"
+            elif "list" in type_name:
+                json_type = "array"
+            elif "dict" in type_name:
+                json_type = "object"
+
+            parameters["properties"][param_name] = {
+                "type": json_type,
+                "description": f"Parameter: {param_name}",
+            }
+
+            # Check if parameter is required
+            if param.default == inspect.Parameter.empty:
+                parameters["required"].append(param_name)
+
+    except Exception as e:
+        logging.error(f"Error extracting method parameters: {e}")
+
+    return parameters
 
 
 @app.get("/api/tools")
@@ -453,39 +666,103 @@ async def execute_tool(tool_name: str, request: ToolExecuteRequest) -> JSONRespo
     try:
         # Get all available tools
         tools = discover_available_tools()
-        
+
         # Find the requested tool
         tool_info = None
         for tool in tools:
             if tool["name"] == tool_name:
                 tool_info = tool
                 break
-                
+
         if not tool_info:
             return JSONResponse(
                 content={"status": "error", "message": f"Tool '{tool_name}' not found"},
                 status_code=404,
             )
-        
-        # Import the tool class dynamically
+
+        # Import the tool class or function dynamically
         module_path = tool_info["module"]
-        class_name = tool_info["class_name"]
-        
-        module = __import__(module_path, fromlist=[class_name])
-        tool_class = getattr(module, class_name)
-        
-        # Create a tool instance
-        tool_instance = tool_class()
-        
-        # Execute the tool with the provided inputs
+        attr_name = tool_info["class_name"]
+        is_class = tool_info.get(
+            "is_class", True
+        )  # Default to class-based for backward compatibility
+
+        # Import the module
+        try:
+            module = importlib.import_module(module_path)
+            tool_attr = getattr(module, attr_name)
+        except (ImportError, AttributeError) as e:
+            logging.error(f"Error importing tool: {str(e)}")
+            return JSONResponse(
+                content={
+                    "status": "error",
+                    "message": f"Error importing tool: {str(e)}",
+                },
+                status_code=500,
+            )
+
+        # Execute the tool based on its type
         inputs = request.inputs or {}
-        result = tool_instance._run(**inputs)
-        
+
+        if is_class:
+            # Class-based tool: instantiate and call _run
+            try:
+                # Try instantiating with required parameters
+                try:
+                    # First try with name and description
+                    tool_instance = tool_attr(
+                        name=tool_info["name"], description=tool_info["description"]
+                    )
+                except Exception as name_desc_error:
+                    logging.warning(
+                        f"Error instantiating tool with name/description: {str(name_desc_error)}"
+                    )
+                    # Try with just the required parameters from the inputs
+                    required_params = {}
+                    if (
+                        "parameters" in tool_info
+                        and "required" in tool_info["parameters"]
+                    ):
+                        for param in tool_info["parameters"]["required"]:
+                            if param in inputs:
+                                required_params[param] = inputs[param]
+
+                    try:
+                        tool_instance = tool_attr(**required_params)
+                    except Exception:
+                        # Last resort: try with no parameters
+                        tool_instance = tool_attr()
+
+                # Call the _run method with inputs
+                result = tool_instance._run(**inputs)
+            except Exception as e:
+                logging.error(f"Error executing class-based tool: {str(e)}")
+                raise Exception(f"Failed to execute tool: {str(e)}")
+        else:
+            # Function-based tool: call directly
+            try:
+                result = tool_attr(**inputs)
+                # Handle async functions
+                if inspect.iscoroutine(result):
+                    import asyncio
+
+                    result = asyncio.run(result)
+            except Exception as e:
+                logging.error(f"Error executing function-based tool: {str(e)}")
+                raise Exception(f"Failed to execute tool: {str(e)}")
+
+        # Convert non-serializable objects to strings
+        if not isinstance(result, (str, int, float, bool, list, dict, type(None))):
+            result = str(result)
+
         return JSONResponse(content={"status": "success", "result": result})
     except ImportError as e:
         logging.error(f"Error importing tool module: {str(e)}")
         return JSONResponse(
-            content={"status": "error", "message": f"Error importing tool module: {str(e)}"},
+            content={
+                "status": "error",
+                "message": f"Error importing tool module: {str(e)}",
+            },
             status_code=500,
         )
     except Exception as e:
