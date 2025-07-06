@@ -37,6 +37,7 @@ class CrewVisualizationListener(BaseEventListener):
     """Event listener for visualizing crew execution in the UI."""
     
     def __init__(self):
+        self._registered_buses = set()
         super().__init__()
         self.active_connections: List[WebSocket] = []
         self.crew_state: Dict[str, Any] = {}
@@ -102,6 +103,13 @@ class CrewVisualizationListener(BaseEventListener):
     
     def setup_listeners(self, crewai_event_bus):
         """Set up event listeners for crew visualization."""
+        bus_id = id(crewai_event_bus)
+        if bus_id in self._registered_buses:
+            logger.info(f"Listeners already set up for event bus {bus_id}.")
+            return
+
+        logger.info(f"Setting up new listeners for event bus {bus_id}")
+        self._registered_buses.add(bus_id)
         
         @crewai_event_bus.on(CrewKickoffStartedEvent)
         def on_crew_kickoff_started(source, event):

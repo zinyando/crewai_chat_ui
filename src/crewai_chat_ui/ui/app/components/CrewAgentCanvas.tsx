@@ -379,24 +379,18 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       console.log("WebSocket connected for crew visualization");
       setConnected(true);
       setError(null);
-
-      // Send the crew ID to the server
-      if (crewId) {
-        ws.send(JSON.stringify({ crew_id: crewId }));
-      }
+      // We don't need to send crewId, the server handles it
     };
 
     ws.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
 
-        // Check if this is a connection test message
         if (data.type === "connection_test") {
           console.log("Received connection test message, not updating state");
           return;
         }
 
-        // Always set hasReceivedData to true if we receive any valid crew/agent/task data
         if (
           (data.crew && Object.keys(data.crew).length > 0) ||
           (data.agents &&
@@ -407,60 +401,41 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
           setHasReceivedData(true);
         }
 
-        // Use a functional update to ensure we're working with the latest state
         setState((prevState) => {
-          // Create a deep merge of the state
-          const newState = { ...prevState };
+          // Deep copy to avoid state mutation issues
+          const newState = JSON.parse(JSON.stringify(prevState));
 
-          // Update crew if provided
+          // Update crew
           if (data.crew) {
-            newState.crew = { ...prevState.crew, ...data.crew };
+            newState.crew = { ...(newState.crew || {}), ...data.crew };
           }
 
-          // Update agents by ID if provided
+          // Update agents using a Map for efficient merging
           if (data.agents && Array.isArray(data.agents)) {
-            // Create a map of existing agents by ID for faster lookup
-            const agentMap = new Map();
-            prevState.agents.forEach((agent) => agentMap.set(agent.id, agent));
-
-            // Update or add new agents
-            const updatedAgents = data.agents.map((newAgent: Agent) => {
-              const existingAgent = agentMap.get(newAgent.id);
-              return existingAgent
-                ? { ...existingAgent, ...newAgent }
-                : newAgent;
+            const agentMap = new Map(
+              newState.agents.map((a: Agent) => [a.id, a])
+            );
+            data.agents.forEach((newAgent: Agent) => {
+              agentMap.set(newAgent.id, {
+                ...(agentMap.get(newAgent.id) || {}),
+                ...newAgent,
+              });
             });
-
-            // Preserve agents that weren't in the update
-            const updatedAgentIds = new Set(
-              updatedAgents.map((a: Agent) => a.id)
-            );
-            const unchangedAgents = prevState.agents.filter(
-              (a: Agent) => !updatedAgentIds.has(a.id)
-            );
-
-            newState.agents = [...unchangedAgents, ...updatedAgents];
+            newState.agents = Array.from(agentMap.values());
           }
 
-          // Update tasks by ID if provided
+          // Update tasks using a Map for efficient merging
           if (data.tasks && Array.isArray(data.tasks)) {
-            // Create a map of existing tasks by ID for faster lookup
-            const taskMap = new Map();
-            prevState.tasks.forEach((task) => taskMap.set(task.id, task));
-
-            // Update or add new tasks
-            const updatedTasks = data.tasks.map((newTask: Task) => {
-              const existingTask = taskMap.get(newTask.id);
-              return existingTask ? { ...existingTask, ...newTask } : newTask;
-            });
-
-            // Preserve tasks that weren't in the update
-            const updatedTaskIds = new Set(updatedTasks.map((t: Task) => t.id));
-            const unchangedTasks = prevState.tasks.filter(
-              (t: Task) => !updatedTaskIds.has(t.id)
+            const taskMap = new Map(
+              newState.tasks.map((t: Task) => [t.id, t])
             );
-
-            newState.tasks = [...unchangedTasks, ...updatedTasks];
+            data.tasks.forEach((newTask: Task) => {
+              taskMap.set(newTask.id, {
+                ...(taskMap.get(newTask.id) || {}),
+                ...newTask,
+              });
+            });
+            newState.tasks = Array.from(taskMap.values());
           }
 
           return newState;
@@ -479,6 +454,13 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
     ws.onerror = (event: Event) => {
       console.error("WebSocket error:", event);
       setError("Error occurred");
+    };
+
+    // Cleanup on unmount
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
     };
   }, [crewId]);
 
