@@ -53,7 +53,7 @@ export default function Landing() {
       {/* Header */}
       <header className="py-4 px-6 border-b bg-background">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">CrewAI</h1>
+          <h1 className="text-2xl font-bold">CrewAI Chat UI</h1>
           <Button
             variant="ghost"
             size="icon"
@@ -76,7 +76,7 @@ export default function Landing() {
             Choose Your Interaction Mode
           </h2>
           <p className="text-xl max-w-2xl mx-auto">
-            Select how you want to interact with the AI crew
+            Select how you want to interact with the Crew
           </p>
         </div>
 
@@ -88,8 +88,8 @@ export default function Landing() {
             </div>
             <h3 className="text-2xl font-bold mb-4 text-center">Chat Mode</h3>
             <p className="text-center flex-grow">
-              Have a natural conversation with the AI crew. Ask questions and
-              get detailed responses through an interactive chat interface.
+              Have a natural conversation with the Crew. Ask questions and get
+              detailed responses through an interactive chat interface.
             </p>
             <div className="flex justify-center mt-6 pt-2">
               <Button onClick={handleChatMode} className="w-full" size="lg">
