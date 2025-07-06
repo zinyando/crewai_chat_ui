@@ -92,6 +92,10 @@ class KickoffRequest(BaseModel):
     inputs: Optional[Dict[str, str]] = None
 
 
+class ToolExecuteRequest(BaseModel):
+    inputs: Optional[Dict[str, str]] = None
+
+
 @app.post("/api/chat")
 async def chat(message: ChatMessage) -> JSONResponse:
     """API endpoint to handle chat messages."""
@@ -334,14 +338,118 @@ async def get_available_crews() -> JSONResponse:
     return JSONResponse(content={"status": "success", "crews": discovered_crews})
 
 
+@app.get("/api/tools")
+async def get_available_tools() -> JSONResponse:
+    """Get a list of all available tools from the CrewAI toolkit.
+
+    Returns:
+        JSONResponse with the list of available tools and their schemas
+    """
+    try:
+        # Import CrewAI tools module
+        from crewai.tools import tool_registry
+
+        # Get all registered tools
+        registered_tools = tool_registry.get_registered_tools()
+
+        # Format tools for the frontend
+        tools_list = []
+        for tool_name, tool_class in registered_tools.items():
+            # Create a tool instance to get its schema
+            try:
+                tool_instance = tool_class()
+                tool_schema = tool_instance.openai_schema
+
+                # Extract relevant information
+                tools_list.append(
+                    {
+                        "name": tool_name,
+                        "description": tool_schema.get(
+                            "description", "No description available"
+                        ),
+                        "parameters": tool_schema.get("parameters", {}),
+                    }
+                )
+            except Exception as e:
+                logging.warning(f"Could not initialize tool {tool_name}: {str(e)}")
+                # Add basic information without schema
+                tools_list.append(
+                    {
+                        "name": tool_name,
+                        "description": "Could not initialize tool",
+                        "parameters": {},
+                    }
+                )
+
+        return JSONResponse(content={"status": "success", "tools": tools_list})
+    except ImportError as e:
+        logging.error(f"Error importing CrewAI tools: {str(e)}")
+        return JSONResponse(
+            content={"status": "error", "message": "CrewAI tools module not available"},
+            status_code=500,
+        )
+    except Exception as e:
+        logging.error(f"Error getting available tools: {str(e)}")
+        return JSONResponse(
+            content={"status": "error", "message": f"Error retrieving tools: {str(e)}"},
+            status_code=500,
+        )
+
+
+@app.post("/api/tools/{tool_name}/execute")
+async def execute_tool(tool_name: str, request: ToolExecuteRequest) -> JSONResponse:
+    """Execute a specific tool with the provided inputs.
+
+    Args:
+        tool_name: The name of the tool to execute
+        request: The inputs for the tool
+
+    Returns:
+        JSONResponse with the tool execution results
+    """
+    try:
+        # Import CrewAI tools module
+        from crewai.tools import tool_registry
+
+        # Get the tool class
+        registered_tools = tool_registry.get_registered_tools()
+        if tool_name not in registered_tools:
+            return JSONResponse(
+                content={"status": "error", "message": f"Tool '{tool_name}' not found"},
+                status_code=404,
+            )
+
+        # Create a tool instance
+        tool_class = registered_tools[tool_name]
+        tool_instance = tool_class()
+
+        # Execute the tool with the provided inputs
+        inputs = request.inputs or {}
+        result = tool_instance._run(**inputs)
+
+        return JSONResponse(content={"status": "success", "result": result})
+    except ImportError as e:
+        logging.error(f"Error importing CrewAI tools: {str(e)}")
+        return JSONResponse(
+            content={"status": "error", "message": "CrewAI tools module not available"},
+            status_code=500,
+        )
+    except Exception as e:
+        logging.error(f"Error executing tool {tool_name}: {str(e)}")
+        return JSONResponse(
+            content={"status": "error", "message": f"Error executing tool: {str(e)}"},
+            status_code=500,
+        )
+
+
 @app.post("/api/crews/{crew_id}/kickoff")
 async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
     """Run a specific crew directly with optional inputs.
-    
+
     Args:
         crew_id: The ID of the crew to run
         request: Optional inputs for the crew
-        
+
     Returns:
         JSONResponse with the crew run results
     """
@@ -368,33 +476,39 @@ async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
             crew_visualization_listener.setup_listeners(event_bus)
             logging.info(f"Crew visualization listener set up for crew: {crew_id}")
         else:
-            logging.warning(f"Crew instance for {crew_id} does not have 'get_event_bus' method.")
+            logging.warning(
+                f"Crew instance for {crew_id} does not have 'get_event_bus' method."
+            )
 
         # Create a handler for this crew if it doesn't exist
         if crew_id not in chat_handlers:
             chat_handlers[crew_id] = ChatHandler(crew_instance, crew_name)
-        
+
         handler = chat_handlers[crew_id]
-        
+
         # Run the crew directly
         inputs = request.inputs or {}
-        
+
         # Run the crew kickoff in a separate thread to not block the API
         thread = threading.Thread(target=handler.run_crew, args=(inputs,))
         thread.start()
 
-        return JSONResponse(content={
-            "status": "success",
-            "message": f"Crew '{crew_name}' kickoff started.",
-            "crew_id": crew_id,
-        })
-        
-        return JSONResponse(content={
-            "status": "success",
-            "crew_id": crew_id,
-            "crew_name": crew_name,
-            "result": result
-        })
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": f"Crew '{crew_name}' kickoff started.",
+                "crew_id": crew_id,
+            }
+        )
+
+        return JSONResponse(
+            content={
+                "status": "success",
+                "crew_id": crew_id,
+                "crew_name": crew_name,
+                "result": result,
+            }
+        )
     except HTTPException as e:
         # Re-raise HTTP exceptions
         raise
@@ -412,16 +526,21 @@ async def websocket_endpoint(websocket: WebSocket):
         # Connect the WebSocket client to the event listener
         await crew_visualization_listener.connect(websocket)
         logging.info("WebSocket client connected successfully")
-        
+
         # Send a test message to verify the connection is working
         try:
             from crewai_chat_ui.event_listener import CustomJSONEncoder
-            test_message = {"type": "connection_test", "status": "connected", "timestamp": datetime.datetime.now()}
+
+            test_message = {
+                "type": "connection_test",
+                "status": "connected",
+                "timestamp": datetime.datetime.now(),
+            }
             await websocket.send_text(json.dumps(test_message, cls=CustomJSONEncoder))
             logging.info("Test message sent to WebSocket client")
         except Exception as e:
             logging.error(f"Failed to send test message: {str(e)}", exc_info=True)
-        
+
         # Keep the connection open and handle messages
         while True:
             # Wait for messages from the client (if any)
