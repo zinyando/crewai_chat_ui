@@ -515,7 +515,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
     const agentXOffset = (256 - 208) / 2;
 
     sortedAgents.forEach((agent, index) => {
-      const yPos = 200 + index * 150;
+      const yPos = 300 + index * 150;
       const associatedTasks = state.tasks.filter(
         (t) => t.agent_id === agent.id
       );
