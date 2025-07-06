@@ -337,11 +337,20 @@ class CrewVisualizationListener(BaseEventListener):
         @crewai_event_bus.on(CrewKickoffCompletedEvent)
         def on_crew_kickoff_completed(source, event):
             logger.info(f"Crew '{event.crew_name}' execution completed")
+
+            output_text = event.output.raw if hasattr(event.output, 'raw') else str(event.output)
             
             # Update crew status
             self.crew_state["status"] = "completed"
             self.crew_state["completed_at"] = event.timestamp.isoformat() if isinstance(event.timestamp, datetime) else event.timestamp
-            self.crew_state["output"] = event.output
+            self.crew_state["output"] = output_text
+
+            # Mark all agents and tasks as completed
+            for agent_id in self.agent_states:
+                self.agent_states[agent_id]["status"] = "completed"
+            
+            for task_id in self.task_states:
+                self.task_states[task_id]["status"] = "completed"
             
             # Broadcast the update asynchronously
             # Schedule the broadcast on the main event loop
