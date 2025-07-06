@@ -339,12 +339,39 @@ async def get_available_crews() -> JSONResponse:
 
 
 def discover_available_tools(directory: Optional[Path] = None) -> List[Dict[str, Any]]:
-    """Discover all available tools from the local 'tools' directory."""
+    """Discover all available tools from any 'tools' directories in the project.
+    
+    Args:
+        directory: Optional directory to search in. If None, uses current working directory.
+        
+    Returns:
+        List of dictionaries containing tool information.
+    """
     import inspect
     import importlib
     import logging
+    import os
+    import sys
     from pathlib import Path
     from typing import get_type_hints, Dict, Any, List, Optional
+    
+    # Helper function to filter out system directories and files
+    def is_user_project_file(path):
+        path_str = str(path)
+        excluded_patterns = [
+            "__pycache__",
+            ".git",
+            ".venv",
+            "venv",
+            "env",
+            "node_modules",
+            ".pytest_cache",
+            ".mypy_cache",
+            "dist",
+            "build",
+            "egg-info",
+        ]
+        return not any(pattern in path_str for pattern in excluded_patterns)
 
     # Try different import paths for BaseTool
     BaseTool = None
@@ -363,18 +390,38 @@ def discover_available_tools(directory: Optional[Path] = None) -> List[Dict[str,
                 return []
 
     tools_list = []
-    # Correctly locate the 'tools' directory relative to this server.py file
-    search_dir = directory or Path(__file__).parent / "tools"
-
-    if not search_dir.exists() or not search_dir.is_dir():
-        logging.warning(f"Tools directory not found at {search_dir}")
+    
+    # Use current working directory if no directory is specified
+    current_dir = directory or Path(os.getcwd())
+    
+    # Find all tools directories
+    tools_dirs = list(current_dir.glob("**/tools"))
+    
+    # Filter out system directories and keep only user project directories
+    tools_dirs = [d for d in tools_dirs if is_user_project_file(d)]
+    
+    if not tools_dirs:
+        logging.warning(f"No tools directories found in {current_dir}")
         return []
-
-    for file_path in search_dir.glob("*.py"):
-        if file_path.name.startswith("__"):
-            continue
-
-        module_name = f"crewai_chat_ui.tools.{file_path.stem}"
+    
+    # Process each tools directory
+    for tools_dir in tools_dirs:
+        logging.info(f"Searching for tools in {tools_dir}")
+        
+        for file_path in tools_dir.glob("*.py"):
+            if file_path.name.startswith("__"):
+                continue
+                
+            # Add the parent directory to sys.path temporarily to enable imports
+            parent_dir = str(file_path.parent.parent)
+            if parent_dir not in sys.path:
+                sys.path.insert(0, parent_dir)
+                
+            # Determine the module name based on the file path
+            relative_path = file_path.relative_to(Path(parent_dir))
+            module_parts = list(relative_path.parts)
+            module_parts[-1] = module_parts[-1].replace(".py", "")
+            module_name = ".".join(module_parts)
         try:
             module = importlib.import_module(module_name)
             for attr_name in dir(module):
