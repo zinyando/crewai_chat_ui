@@ -361,7 +361,15 @@ async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
 
         # Load the crew
         crew_instance, crew_name = load_crew_from_module(Path(crew_path))
-        
+
+        # Get the crew's event bus and set up the visualization listener
+        if hasattr(crew_instance, "get_event_bus"):
+            event_bus = crew_instance.get_event_bus()
+            crew_visualization_listener.setup_listeners(event_bus)
+            logging.info(f"Crew visualization listener set up for crew: {crew_id}")
+        else:
+            logging.warning(f"Crew instance for {crew_id} does not have 'get_event_bus' method.")
+
         # Create a handler for this crew if it doesn't exist
         if crew_id not in chat_handlers:
             chat_handlers[crew_id] = ChatHandler(crew_instance, crew_name)
@@ -371,8 +379,15 @@ async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
         # Run the crew directly
         inputs = request.inputs or {}
         
-        # Create a thread to run the crew
-        result = handler.run_crew(inputs)
+        # Run the crew kickoff in a separate thread to not block the API
+        thread = threading.Thread(target=handler.run_crew, args=(inputs,))
+        thread.start()
+
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Crew '{crew_name}' kickoff started.",
+            "crew_id": crew_id,
+        })
         
         return JSONResponse(content={
             "status": "success",
