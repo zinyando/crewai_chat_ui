@@ -275,7 +275,6 @@ const CrewNode = ({ data }: NodeProps) => {
   const typedData = data as CrewNodeData;
   return (
     <div className="border rounded-md p-3 bg-card w-64 shadow-md">
-      <Handle type="target" position={Position.Top} />
       <div className="flex items-center mb-2">
         <div
           className={`w-3 h-3 rounded-full mr-2 ${
@@ -321,7 +320,6 @@ const CrewNode = ({ data }: NodeProps) => {
           </p>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 };
