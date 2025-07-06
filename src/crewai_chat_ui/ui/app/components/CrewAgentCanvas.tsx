@@ -11,6 +11,7 @@ import {
   Position,
   MarkerType,
   ConnectionLineType,
+  Handle,
 } from "@xyflow/react";
 import type { Node, Edge, NodeTypes, NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -130,6 +131,7 @@ const AgentNode = ({ data }: NodeProps) => {
         ${typedData.status === "completed" ? "border-blue-500" : ""}
       `}
     >
+      <Handle type="target" position={Position.Top} />
       {/* Agent Header - Name and Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center">
@@ -204,6 +206,7 @@ const AgentNode = ({ data }: NodeProps) => {
           </div>
         )}
       </div>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 };
@@ -272,6 +275,7 @@ const CrewNode = ({ data }: NodeProps) => {
   const typedData = data as CrewNodeData;
   return (
     <div className="border rounded-md p-3 bg-card w-64 shadow-md">
+      <Handle type="target" position={Position.Top} />
       <div className="flex items-center mb-2">
         <div
           className={`w-3 h-3 rounded-full mr-2 ${
@@ -317,6 +321,7 @@ const CrewNode = ({ data }: NodeProps) => {
           </p>
         )}
       </div>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 };
@@ -564,27 +569,6 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
     // 3. Create edges
     console.log("Creating edges...");
-
-    // Connect crew to first agent
-    if (state.crew && sortedAgents.length > 0) {
-      const firstAgent = sortedAgents[0];
-      const crewToAgentEdge: Edge = {
-        id: `crew-to-agent-${firstAgent.id}`,
-        source: `crew-${state.crew.id}`,
-        target: `agent-${firstAgent.id}`,
-        type: "default", // Use default edge type instead of smoothstep
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: "#6b7280",
-        },
-        style: {
-          strokeWidth: 2,
-          stroke: "#6b7280",
-        },
-      };
-      newEdges.push(crewToAgentEdge);
-      console.log("Added crew-to-agent edge:", crewToAgentEdge.id);
-    }
 
     // Connect agents in sequence
     for (let i = 0; i < sortedAgents.length - 1; i++) {
