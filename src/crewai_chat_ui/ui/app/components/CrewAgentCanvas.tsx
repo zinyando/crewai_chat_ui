@@ -54,6 +54,8 @@ interface AgentNodeData extends Record<string, unknown> {
   status: "initializing" | "waiting" | "running" | "completed";
   description: string;
   associatedTasks?: Task[];
+  isFirst?: boolean;
+  isLast?: boolean;
 }
 
 interface TaskNodeData extends Record<string, unknown> {
@@ -131,7 +133,7 @@ const AgentNode = ({ data }: NodeProps) => {
         ${typedData.status === "completed" ? "border-blue-500" : ""}
       `}
     >
-      <Handle type="target" position={Position.Top} />
+      {!typedData.isFirst && <Handle type="target" position={Position.Top} />}
       {/* Agent Header - Name and Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center">
@@ -206,7 +208,7 @@ const AgentNode = ({ data }: NodeProps) => {
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} />
+      {!typedData.isLast && <Handle type="source" position={Position.Bottom} />}
     </div>
   );
 };
@@ -532,8 +534,8 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       return state.agents.indexOf(a) - state.agents.indexOf(b);
     });
 
-    sortedAgents.forEach((agent, idx) => {
-      const yPos = 200 + idx * 150;
+    sortedAgents.forEach((agent, index) => {
+      const yPos = 200 + index * 150;
       const associatedTasks = state.tasks.filter(
         (t) => t.agent_id === agent.id
       );
@@ -548,6 +550,8 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
           status: agent.status,
           description: agent.description,
           associatedTasks: associatedTasks,
+          isFirst: index === 0,
+          isLast: index === sortedAgents.length - 1,
         },
         position: { x: 0, y: yPos },
         draggable: true,
