@@ -574,7 +574,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
       // Determine edge color based on current agent status
       let edgeColor = "#6b7280"; // default gray
-      let animated = false;
+      let animated = true;
 
       if (currentAgent.status === "completed") {
         edgeColor = "#10b981"; // green for completed
