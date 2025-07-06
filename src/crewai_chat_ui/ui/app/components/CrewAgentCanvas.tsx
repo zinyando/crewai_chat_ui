@@ -426,9 +426,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
           // Update tasks using a Map for efficient merging
           if (data.tasks && Array.isArray(data.tasks)) {
-            const taskMap = new Map(
-              newState.tasks.map((t: Task) => [t.id, t])
-            );
+            const taskMap = new Map(newState.tasks.map((t: Task) => [t.id, t]));
             data.tasks.forEach((newTask: Task) => {
               taskMap.set(newTask.id, {
                 ...(taskMap.get(newTask.id) || {}),
@@ -610,27 +608,6 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
               Connecting to visualization service...
             </p>
           </div>
-        </div>
-      )}
-
-      {/* Debug info in development mode */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="mb-4 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs">
-          <p>WebSocket connected: {connected ? "Yes" : "No"}</p>
-          <p>Has received data: {hasReceivedData ? "Yes" : "No"}</p>
-          <p>Crew: {state?.crew?.name || "None"}</p>
-          <p>Agents: {state?.agents?.length || 0}</p>
-          <p>Tasks: {state?.tasks?.length || 0}</p>
-          <p>Nodes: {nodes.length}</p>
-          <p>Edges: {edges.length}</p>
-          <p>
-            Running agents:{" "}
-            {state?.agents?.filter((a) => a.status === "running").length || 0}
-          </p>
-          <p>
-            Running tasks:{" "}
-            {state?.tasks?.filter((t) => t.status === "running").length || 0}
-          </p>
         </div>
       )}
 
