@@ -95,17 +95,17 @@ interface CrewAgentCanvasProps {
 const getStatusColor = (status: string): string => {
   switch (status) {
     case "running":
-      return "bg-green-500 animate-pulse";
+      return "bg-emerald-500 animate-pulse";
     case "completed":
-      return "bg-blue-500";
+      return "bg-indigo-500";
     case "initializing":
-      return "bg-yellow-500 animate-pulse";
+      return "bg-amber-500 animate-pulse";
     case "waiting":
-      return "bg-yellow-500";
+      return "bg-amber-500";
     case "pending":
-      return "bg-gray-500";
+      return "bg-slate-400";
     default:
-      return "bg-gray-500";
+      return "bg-slate-400";
   }
 };
 
@@ -129,8 +129,8 @@ const AgentNode = ({ data }: NodeProps) => {
     <div
       className={`
         border rounded-md p-2 bg-card shadow-md w-52
-        ${typedData.status === "running" ? "border-green-500 border-2" : ""}
-        ${typedData.status === "completed" ? "border-blue-500" : ""}
+        ${typedData.status === "running" ? "border-emerald-500 border-2" : ""}
+        ${typedData.status === "completed" ? "border-indigo-500" : ""}
       `}
     >
       {!typedData.isFirst && <Handle type="target" position={Position.Top} />}
@@ -147,7 +147,7 @@ const AgentNode = ({ data }: NodeProps) => {
           </h5>
         </div>
         {typedData.status === "running" && (
-          <span className="text-xs text-green-500 flex items-center">
+          <span className="text-xs text-emerald-500 flex items-center">
             <Loader2 className="h-2.5 w-2.5 animate-spin mr-0.5" />
             Active
           </span>
@@ -160,21 +160,21 @@ const AgentNode = ({ data }: NodeProps) => {
       </div>
 
       {/* Tasks Button */}
-      <div className="mt-1.5 pt-1.5 border-t border-dashed border-gray-200 dark:border-gray-700">
+      <div className="mt-1.5 pt-1.5 border-t border-dashed border-slate-200 dark:border-slate-700">
         <button
-          className="w-full text-xs py-0.5 px-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded flex items-center justify-center transition-colors"
+          className="w-full text-xs py-0.5 px-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded flex items-center justify-center transition-colors"
           onMouseEnter={() => setShowTasks(true)}
           onMouseLeave={() => setShowTasks(false)}
         >
           <span className="mr-1">Tasks</span>
-          <span className="bg-gray-200 dark:bg-gray-700 rounded-full w-4 h-4 flex items-center justify-center text-xs">
+          <span className="bg-slate-200 dark:bg-slate-700 rounded-full w-4 h-4 flex items-center justify-center text-xs">
             {associatedTasks.length}
           </span>
         </button>
 
         {/* Task Popup */}
         {showTasks && (
-          <div className="absolute z-10 mt-1 p-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg w-64">
+          <div className="absolute z-10 mt-1 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg w-64">
             <h6 className="text-xs font-semibold mb-1.5">Associated Tasks:</h6>
             <div className="max-h-40 overflow-y-auto">
               {associatedTasks.length > 0 ? (
@@ -183,10 +183,10 @@ const AgentNode = ({ data }: NodeProps) => {
                     key={task.id}
                     className={`text-xs p-1.5 mb-1 rounded ${
                       task.status === "running"
-                        ? "bg-green-50 dark:bg-green-900/20"
+                        ? "bg-emerald-50 dark:bg-emerald-900/20"
                         : task.status === "completed"
-                        ? "bg-blue-50 dark:bg-blue-900/20"
-                        : "bg-gray-50 dark:bg-gray-800/50"
+                        ? "bg-indigo-50 dark:bg-indigo-900/20"
+                        : "bg-slate-50 dark:bg-slate-800/50"
                     }`}
                   >
                     <div className="flex items-center">
@@ -221,12 +221,12 @@ const TaskNode = ({ data }: NodeProps) => {
         text-xs p-3 rounded border shadow-md
         ${
           typedData.status === "running"
-            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+            ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
             : ""
         }
         ${
           typedData.status === "completed"
-            ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+            ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800"
             : ""
         }
       `}
@@ -246,7 +246,7 @@ const TaskNode = ({ data }: NodeProps) => {
         <div
           className={`text-xs mt-2 ${
             typedData.status === "running"
-              ? "text-green-600 font-medium"
+              ? "text-emerald-600 dark:text-emerald-400 font-medium"
               : "text-muted-foreground"
           }`}
         >
@@ -254,7 +254,7 @@ const TaskNode = ({ data }: NodeProps) => {
         </div>
       )}
       {(typedData.next_tasks?.length || typedData.depends_on?.length) && (
-        <div className="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-gray-700 text-muted-foreground">
+        <div className="mt-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700 text-muted-foreground">
           {typedData.depends_on?.length && (
             <div className="text-xs">
               <span className="font-medium">Depends on:</span>{" "}
@@ -281,24 +281,24 @@ const CrewNode = ({ data }: NodeProps) => {
         <div
           className={`w-3 h-3 rounded-full mr-2 ${
             typedData.status === "initializing"
-              ? "bg-yellow-500"
+              ? "bg-amber-500"
               : typedData.status === "running"
-              ? "bg-green-500"
+              ? "bg-emerald-500"
               : typedData.status === "completed"
-              ? "bg-blue-500"
-              : "bg-gray-500"
+              ? "bg-indigo-500"
+              : "bg-slate-400"
           }`}
         ></div>
         <h3 className="font-bold">{typedData.name}</h3>
       </div>
       {typedData.status === "running" && (
-        <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 rounded-full flex items-center">
+        <span className="ml-2 px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 rounded-full flex items-center">
           <Loader2 className="h-3 w-3 animate-spin mr-1" />
           Running
         </span>
       )}
       {typedData.status === "completed" && (
-        <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 rounded-full">
+        <span className="ml-2 px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100 rounded-full">
           Completed
         </span>
       )}
@@ -306,7 +306,7 @@ const CrewNode = ({ data }: NodeProps) => {
         {typedData.type && (
           <p className="mt-1 flex items-center">
             <span className="font-medium">Type:</span>
-            <span className="ml-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full capitalize">
+            <span className="ml-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full capitalize">
               {typedData.type}
             </span>
           </p>
@@ -553,13 +553,13 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       const targetId = `agent-${nextAgent.id}`;
 
       // Determine edge color based on current agent status
-      let edgeColor = "#6b7280"; // default gray
+      let edgeColor = "#64748b"; // default slate-500
       let animated = true;
 
       if (currentAgent.status === "completed") {
-        edgeColor = "#10b981"; // green for completed
+        edgeColor = "#6366f1"; // indigo-500 for completed
       } else if (currentAgent.status === "running") {
-        edgeColor = "#f59e0b"; // orange for running
+        edgeColor = "#10b981"; // emerald-500 for running
         animated = true;
       }
 
@@ -594,7 +594,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       </h3>
 
       {error && (
-        <div className="bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 p-3 rounded-md mb-4">
+        <div className="bg-rose-100 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 p-3 rounded-md mb-4">
           {error}
         </div>
       )}
