@@ -368,8 +368,6 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       wsRef.current.close();
     }
 
-    console.log("Establishing WebSocket connection for crew visualization...");
-
     // Create a new WebSocket connection
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws/crew-visualization`;
@@ -390,7 +388,6 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
     ws.onmessage = (event: MessageEvent) => {
       try {
-        console.log("WebSocket message received:", event.data);
         const data = JSON.parse(event.data);
 
         // Check if this is a connection test message
@@ -514,7 +511,6 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
         connectable: true,
       };
       newNodes.push(crewNode);
-      console.log("Added crew node:", crewNode.id);
     }
 
     // 2. Create agent nodes in vertical layout
@@ -565,17 +561,9 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       };
 
       newNodes.push(agentNode);
-      console.log(
-        "Added agent node:",
-        agentNode.id,
-        "at position",
-        agentNode.position
-      );
     });
 
     // 3. Create edges
-    console.log("Creating edges...");
-
     // Connect agents in sequence
     for (let i = 0; i < sortedAgents.length - 1; i++) {
       const currentAgent = sortedAgents[i];
@@ -612,27 +600,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
       };
 
       newEdges.push(agentEdge);
-      console.log("Added agent-to-agent edge:", agentEdge.id);
     }
-
-    // Log final counts
-    console.log("Final node count:", newNodes.length);
-    console.log("Final edge count:", newEdges.length);
-
-    // Debug: Log all node and edge IDs
-    console.log(
-      "Node IDs:",
-      newNodes.map((n) => n.id)
-    );
-    console.log(
-      "Edge details:",
-      newEdges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        type: e.type,
-      }))
-    );
 
     // Update nodes and edges using the setter functions
     setNodes(newNodes);
