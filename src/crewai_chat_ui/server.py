@@ -53,6 +53,8 @@ from crewai_chat_ui.crew_loader import (
 )
 from crewai_chat_ui.chat_handler import ChatHandler
 from crewai_chat_ui.event_listener import crew_visualization_listener
+from crewai_chat_ui.tool_loader import discover_available_tools as discover_tools
+from crewai_chat_ui.telemetry import telemetry_service
 
 # Create FastAPI app
 app = FastAPI()
@@ -65,6 +67,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Telemetry API endpoints
+@app.get("/api/traces")
+async def get_traces(limit: int = 10):
+    """Get the most recent traces."""
+    return telemetry_service.get_traces(limit=limit)
+
+@app.get("/api/traces/{trace_id}")
+async def get_trace(trace_id: str):
+    """Get a specific trace by ID."""
+    trace = telemetry_service.get_trace(trace_id)
+    if not trace:
+        raise HTTPException(status_code=404, detail="Trace not found")
+    return trace
+
+@app.get("/api/crews/{crew_id}/traces")
+async def get_crew_traces(crew_id: str):
+    """Get all traces for a specific crew."""
+    return telemetry_service.get_traces_for_crew(crew_id)
 
 # Get the directory containing the built React app
 ui_dir = Path(__file__).parent / "ui" / "build" / "client"

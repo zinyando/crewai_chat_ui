@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router";
 import { Card } from "../components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, ExternalLink } from "lucide-react";
+import { Button } from "../components/ui/button";
 import ReactMarkdown from "react-markdown";
 import {
   ReactFlow,
@@ -340,6 +342,7 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
   isRunning,
   resetKey = 0,
 }) => {
+  const navigate = useNavigate();
   // WebSocket reference
   const wsRef = useRef<WebSocket | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -605,9 +608,20 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
 
   return (
     <Card className="p-6 mb-6 overflow-hidden">
-      <h3 className="text-lg font-semibold mb-4">
-        Crew Execution Visualization
-      </h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold">
+          Crew Execution Visualization
+        </h3>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="flex items-center gap-1"
+          onClick={() => navigate(`/kickoff/traces?crewId=${crewId}`)}
+        >
+          <ExternalLink className="h-4 w-4" />
+          View Traces
+        </Button>
+      </div>
 
       {error && (
         <div className="bg-rose-100 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 p-3 rounded-md mb-4">
