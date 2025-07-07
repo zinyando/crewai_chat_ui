@@ -85,7 +85,17 @@ async def get_trace(trace_id: str):
 @app.get("/api/crews/{crew_id}/traces")
 async def get_crew_traces(crew_id: str):
     """Get all traces for a specific crew."""
-    return telemetry_service.get_traces_for_crew(crew_id)
+    logging.info(f"API: Fetching traces for crew_id: {crew_id}")
+    
+    # Debug: Check what traces are available
+    all_traces = telemetry_service.get_traces(limit=100)
+    logging.info(f"API: Total traces available: {len(all_traces)}")
+    
+    # Get traces for this specific crew
+    crew_traces = telemetry_service.get_traces_for_crew(crew_id)
+    logging.info(f"API: Found {len(crew_traces)} traces for crew_id: {crew_id}")
+    
+    return crew_traces
 
 # Get the directory containing the built React app
 ui_dir = Path(__file__).parent / "ui" / "build" / "client"
@@ -539,9 +549,19 @@ async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
             crew_visualization_listener.setup_listeners(event_bus)
             logging.info(f"Crew visualization listener set up for crew: {crew_id}")
         else:
-            logging.warning(
-                f"Crew instance for {crew_id} does not have 'get_event_bus' method."
-            )
+            # If the crew doesn't have a get_event_bus method, use the global event bus
+            from crewai.utilities.events import crewai_event_bus
+            crew_visualization_listener.setup_listeners(crewai_event_bus)
+            logging.info(f"Using global event bus for crew: {crew_id} since it doesn't have get_event_bus method")
+            
+            # Set the crew ID explicitly to ensure consistent tracking
+            if hasattr(crew_instance, "id"):
+                logging.info(f"Crew ID from instance: {crew_instance.id}")
+            else:
+                # Set an ID on the crew instance if it doesn't have one
+                import uuid
+                crew_instance.id = crew_id
+                logging.info(f"Set crew ID to: {crew_id} on crew instance")
 
         # Create a handler for this crew if it doesn't exist
         if crew_id not in chat_handlers:

@@ -121,8 +121,11 @@ class CrewVisualizationListener(BaseEventListener):
             # Reset state for new execution
             self.reset_state()
             
-            # Get crew ID
+            # Get crew ID - ensure it's a string and normalize it
             crew_id = str(source.id) if hasattr(source, "id") else "unknown"
+            
+            # Log the crew ID for debugging
+            logger.info(f"CrewKickoffStartedEvent - Using crew_id: {crew_id}")
             
             # Store crew information
             self.crew_state = {
@@ -401,8 +404,12 @@ class CrewVisualizationListener(BaseEventListener):
             self.crew_state["completed_at"] = event.timestamp.isoformat() if isinstance(event.timestamp, datetime) else event.timestamp
             self.crew_state["output"] = output_text
             
-            # Get crew ID
-            crew_id = self.crew_state.get("id")
+            # Get crew ID - first try from source, then from state
+            crew_id = str(source.id) if hasattr(source, "id") else self.crew_state.get("id")
+            
+            # Log the crew ID for debugging
+            logger.info(f"CrewKickoffCompletedEvent - Using crew_id: {crew_id}")
+            
             if crew_id:
                 # Record in telemetry
                 telemetry_service.end_crew_trace(
