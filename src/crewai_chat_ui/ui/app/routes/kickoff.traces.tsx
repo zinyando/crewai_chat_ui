@@ -112,7 +112,7 @@ export default function TracesPage() {
   const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("timeline");
+  const [activeTab, setActiveTab] = useState("overview");
   const [selectedSpan, setSelectedSpan] = useState<TimelineSpan | null>(null);
 
   const handleBack = () => {
@@ -457,8 +457,8 @@ export default function TracesPage() {
     );
   };
 
-  // Render overview tab
-  const renderOverview = () => {
+  // Render overview tab with timeline
+  const renderOverviewWithTimeline = () => {
     if (!selectedTrace) return null;
 
     const agentCount = Object.keys(selectedTrace.agents).length;
@@ -538,14 +538,29 @@ export default function TracesPage() {
               </>
             )}
           </div>
+        </div>
 
-          {selectedTrace.output && (
-            <div className="mt-4">
-              <h4 className="text-md font-semibold mb-2">Output</h4>
-              <div className="bg-gray-50 p-3 rounded-md text-sm whitespace-pre-wrap font-mono">
-                {selectedTrace.output}
-              </div>
-            </div>
+        {/* Timeline visualization */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Timeline</h3>
+          <Card>
+            <CardContent>
+              <TraceTimeline
+                spans={timelineSpans}
+                onSpanClick={handleSpanClick}
+              />
+            </CardContent>
+          </Card>
+
+          {selectedSpan && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Span Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TraceSpanDetail span={selectedSpan} />
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
@@ -830,18 +845,18 @@ export default function TracesPage() {
                 </CardHeader>
                 <CardContent>
                   <Tabs
-                    defaultValue="timeline"
+                    defaultValue="overview"
                     value={activeTab}
                     onValueChange={setActiveTab}
                     className="w-full"
                   >
-                    <TabsList className="grid grid-cols-5 mb-4">
+                    <TabsList className="grid grid-cols-4 mb-4">
                       <TabsTrigger
-                        value="timeline"
+                        value="overview"
                         className="flex items-center gap-1"
                       >
-                        <BarChart2 className="h-4 w-4" />
-                        <span>Timeline</span>
+                        <Info className="h-4 w-4" />
+                        <span>Overview</span>
                       </TabsTrigger>
                       <TabsTrigger
                         value="spans"
@@ -850,26 +865,15 @@ export default function TracesPage() {
                         <List className="h-4 w-4" />
                         <span>Spans</span>
                       </TabsTrigger>
-                      <TabsTrigger
-                        value="overview"
-                        className="flex items-center gap-1"
-                      >
-                        <Info className="h-4 w-4" />
-                        <span>Overview</span>
-                      </TabsTrigger>
                       <TabsTrigger value="agents">Agents</TabsTrigger>
                       <TabsTrigger value="tasks">Tasks</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="timeline">
-                      {renderTimeline()}
+                    <TabsContent value="overview">
+                      {renderOverviewWithTimeline()}
                     </TabsContent>
 
                     <TabsContent value="spans">{renderSpans()}</TabsContent>
-
-                    <TabsContent value="overview">
-                      {renderOverview()}
-                    </TabsContent>
 
                     <TabsContent value="agents">{renderAgents()}</TabsContent>
 
