@@ -850,20 +850,13 @@ export default function TracesPage() {
                     onValueChange={setActiveTab}
                     className="w-full"
                   >
-                    <TabsList className="grid grid-cols-4 mb-4">
+                    <TabsList className="grid grid-cols-3 mb-4">
                       <TabsTrigger
                         value="overview"
                         className="flex items-center gap-1"
                       >
                         <Info className="h-4 w-4" />
                         <span>Overview</span>
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="spans"
-                        className="flex items-center gap-1"
-                      >
-                        <List className="h-4 w-4" />
-                        <span>Spans</span>
                       </TabsTrigger>
                       <TabsTrigger value="agents">Agents</TabsTrigger>
                       <TabsTrigger value="tasks">Tasks</TabsTrigger>
@@ -872,8 +865,6 @@ export default function TracesPage() {
                     <TabsContent value="overview">
                       {renderOverviewWithTimeline()}
                     </TabsContent>
-
-                    <TabsContent value="spans">{renderSpans()}</TabsContent>
 
                     <TabsContent value="agents">{renderAgents()}</TabsContent>
 
