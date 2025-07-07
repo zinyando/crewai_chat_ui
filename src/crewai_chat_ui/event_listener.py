@@ -11,7 +11,10 @@ from crewai.utilities.events import (
     AgentExecutionCompletedEvent,
     TaskStartedEvent,
     TaskCompletedEvent,
+    LLMCallStartedEvent,
+    LLMCallCompletedEvent,
 )
+from crewai_chat_ui.telemetry import telemetry_service
 from crewai.utilities.events.base_event_listener import BaseEventListener
 
 # Configure logging
@@ -118,13 +121,19 @@ class CrewVisualizationListener(BaseEventListener):
             # Reset state for new execution
             self.reset_state()
             
+            # Get crew ID
+            crew_id = str(source.id) if hasattr(source, "id") else "unknown"
+            
             # Store crew information
             self.crew_state = {
-                "id": str(source.id) if hasattr(source, "id") else "unknown",
+                "id": crew_id,
                 "name": event.crew_name,
                 "status": "running",
                 "started_at": event.timestamp.isoformat() if isinstance(event.timestamp, datetime) else event.timestamp,
             }
+            
+            # Start a new trace in telemetry
+            telemetry_service.start_crew_trace(crew_id, event.crew_name)
             
             # Store agent information
             for agent in source.agents:
@@ -230,6 +239,17 @@ class CrewVisualizationListener(BaseEventListener):
                 # Update agent status
                 self.agent_states[agent_id]["status"] = "running"
                 
+                # Get crew ID
+                crew_id = self.crew_state.get("id")
+                if crew_id:
+                    # Record in telemetry
+                    telemetry_service.start_agent_execution(
+                        crew_id=crew_id,
+                        agent_id=agent_id,
+                        agent_name=agent.name if hasattr(agent, "name") else agent.role,
+                        agent_role=agent.role
+                    )
+                
                 # If there's a task associated with this execution, update it
                 if hasattr(event, "task"):
                     task = event.task
@@ -255,6 +275,16 @@ class CrewVisualizationListener(BaseEventListener):
                 # Update agent status
                 self.agent_states[agent_id]["status"] = "completed"
                 
+                # Get crew ID
+                crew_id = self.crew_state.get("id")
+                if crew_id:
+                    # Record in telemetry
+                    telemetry_service.end_agent_execution(
+                        crew_id=crew_id,
+                        agent_id=agent_id,
+                        output=event.output if hasattr(event, "output") else None
+                    )
+                
                 # If there's a task associated with this execution, update it
                 if hasattr(event, "task"):
                     task = event.task
@@ -275,6 +305,22 @@ class CrewVisualizationListener(BaseEventListener):
             
             if task_id:
                 logger.info(f"Task '{task.description[:30]}...' started")
+                
+                # Get crew ID
+                crew_id = self.crew_state.get("id")
+                if crew_id:
+                    # Get agent ID if available
+                    agent_id = None
+                    if hasattr(task, "agent") and task.agent:
+                        agent_id = str(task.agent.id) if hasattr(task.agent, "id") else None
+                    
+                    # Record in telemetry
+                    telemetry_service.start_task_execution(
+                        crew_id=crew_id,
+                        task_id=task_id,
+                        task_description=task.description if hasattr(task, "description") else "",
+                        agent_id=agent_id
+                    )
                 
                 # Add task to state if it doesn't exist
                 if task_id not in self.task_states:
@@ -329,6 +375,16 @@ class CrewVisualizationListener(BaseEventListener):
                 # Update task status
                 self.task_states[task_id]["status"] = "completed"
                 
+                # Get crew ID
+                crew_id = self.crew_state.get("id")
+                if crew_id:
+                    # Record in telemetry
+                    telemetry_service.end_task_execution(
+                        crew_id=crew_id,
+                        task_id=task_id,
+                        output=event.output if hasattr(event, "output") else None
+                    )
+                
                 # Broadcast the update asynchronously
                 # Schedule the broadcast on the main event loop
             if hasattr(self, "loop"):
@@ -344,6 +400,15 @@ class CrewVisualizationListener(BaseEventListener):
             self.crew_state["status"] = "completed"
             self.crew_state["completed_at"] = event.timestamp.isoformat() if isinstance(event.timestamp, datetime) else event.timestamp
             self.crew_state["output"] = output_text
+            
+            # Get crew ID
+            crew_id = self.crew_state.get("id")
+            if crew_id:
+                # Record in telemetry
+                telemetry_service.end_crew_trace(
+                    crew_id=crew_id,
+                    output=output_text
+                )
 
             # Mark all agents and tasks as completed
             for agent_id in self.agent_states:
@@ -356,6 +421,60 @@ class CrewVisualizationListener(BaseEventListener):
             # Schedule the broadcast on the main event loop
             if hasattr(self, "loop"):
                 asyncio.run_coroutine_threadsafe(self.broadcast_update(), self.loop)
+
+# Add handlers for LLM call events
+        
+        @crewai_event_bus.on(LLMCallStartedEvent)
+        def on_llm_call_started(source, event):
+            # Get the crew ID
+            crew_id = self.crew_state.get("id")
+            if not crew_id:
+                return
+            
+            # Get the agent ID if available
+            agent_id = None
+            if hasattr(event, "agent") and event.agent:
+                agent_id = str(event.agent.id) if hasattr(event.agent, "id") else None
+            
+            # Log the event
+            logger.info(f"LLM call started")
+            
+            # Add an event to telemetry
+            telemetry_service.add_event(
+                crew_id=crew_id,
+                event_type="llm.started",
+                event_data={
+                    "agent_id": agent_id,
+                    "prompt": event.prompt if hasattr(event, "prompt") else "",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        @crewai_event_bus.on(LLMCallCompletedEvent)
+        def on_llm_call_completed(source, event):
+            # Get the crew ID
+            crew_id = self.crew_state.get("id")
+            if not crew_id:
+                return
+            
+            # Get the agent ID if available
+            agent_id = None
+            if hasattr(event, "agent") and event.agent:
+                agent_id = str(event.agent.id) if hasattr(event.agent, "id") else None
+            
+            # Log the event
+            logger.info(f"LLM call completed")
+            
+            # Add an event to telemetry
+            telemetry_service.add_event(
+                crew_id=crew_id,
+                event_type="llm.completed",
+                event_data={
+                    "agent_id": agent_id,
+                    "response": event.response if hasattr(event, "response") else "",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
 
 # Create a singleton instance
 crew_visualization_listener = CrewVisualizationListener()
