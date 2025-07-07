@@ -90,16 +90,11 @@ interface TimelineSpan {
   endTime: Date | null;
   status: string;
   parentId?: string;
-  children?: TimelineSpan[];
+  children: TimelineSpan[];
   depth: number;
   duration: number;
   serviceName?: string;
   operation?: string;
-  tags?: Record<string, any>;
-  logs?: Array<{
-    timestamp: Date;
-    fields: Record<string, any>;
-  }>;
 }
 
 export default function TracesPage() {
@@ -144,10 +139,7 @@ export default function TracesPage() {
       duration: crewDuration,
       serviceName: "crew",
       operation: "execution",
-      tags: {
-        crew_id: selectedTrace.crew_id,
-        status: selectedTrace.status,
-      },
+      children: [],
     };
     spans.push(crewSpan);
 
@@ -170,11 +162,7 @@ export default function TracesPage() {
         duration: agentDuration,
         serviceName: "agent",
         operation: agent.role,
-        tags: {
-          agent_id: agent.id,
-          role: agent.role,
-          status: agent.status,
-        },
+        children: [],
       };
       spans.push(agentSpan);
     });
@@ -201,12 +189,7 @@ export default function TracesPage() {
         duration: taskDuration,
         serviceName: "task",
         operation: "execution",
-        tags: {
-          task_id: task.id,
-          description: task.description,
-          status: task.status,
-          agent_id: task.agent_id,
-        },
+        children: [],
       };
       spans.push(taskSpan);
     });
@@ -218,7 +201,6 @@ export default function TracesPage() {
     spans.forEach((span) => {
       if (span.parentId && spanMap.has(span.parentId)) {
         const parent = spanMap.get(span.parentId)!;
-        if (!parent.children) parent.children = [];
         parent.children.push(span);
       }
     });

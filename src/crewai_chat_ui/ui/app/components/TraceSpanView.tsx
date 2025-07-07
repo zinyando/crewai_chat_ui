@@ -9,15 +9,10 @@ interface SpanData {
   status: string;
   duration: number; // in milliseconds
   parentId?: string;
-  children?: SpanData[];
+  children: SpanData[];
   depth: number;
   serviceName?: string;
   operation?: string;
-  tags?: Record<string, any>;
-  logs?: Array<{
-    timestamp: Date;
-    fields: Record<string, any>;
-  }>;
 }
 
 interface TraceSpanViewProps {
