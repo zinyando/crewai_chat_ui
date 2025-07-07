@@ -75,10 +75,16 @@ class ChatHandler:
             from crewai_chat_ui.event_listener import crew_visualization_listener
             import uuid
 
-            # Create a crew ID if not available
-            crew_id = (
-                str(uuid.uuid4()) if not hasattr(self.crew, "id") else str(self.crew.id)
-            )
+            # Get or create a crew ID
+            if hasattr(self.crew, "id") and self.crew.id:
+                crew_id = str(self.crew.id)
+                logging.info(f"Using existing crew ID: {crew_id}")
+            else:
+                # Create a new ID if not available
+                crew_id = str(uuid.uuid4())
+                # Set it on the crew instance for consistency
+                self.crew.id = crew_id
+                logging.info(f"Created and set new crew ID: {crew_id}")
 
             # Initialize crew state
             crew_visualization_listener.crew_state = {
@@ -291,6 +297,14 @@ class ChatHandler:
         Returns:
             Dictionary containing the crew execution results
         """
+        # Ensure crew has a valid ID for telemetry tracking
+        if not hasattr(self.crew, "id") or not self.crew.id:
+            import uuid
+            self.crew.id = str(uuid.uuid4())
+            logging.info(f"Set crew ID to {self.crew.id} in run_crew method")
+        else:
+            logging.info(f"Using existing crew ID: {self.crew.id} in run_crew method")
+            
         if not self.is_initialized:
             self.initialize()
 

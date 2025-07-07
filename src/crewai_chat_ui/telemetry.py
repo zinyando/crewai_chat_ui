@@ -76,8 +76,14 @@ class CrewAITelemetry:
             crew_name: The name of the crew
             
         Returns:
-            The trace ID as a string
+            The ID of the trace
         """
+        # Ensure crew_id is a string
+        crew_id = str(crew_id).strip()
+        
+        logger.info(f"Starting trace for crew_id: {crew_id}, crew_name: {crew_name}")
+        logger.info(f"Current traces in storage: {len(traces_storage)}")
+        
         trace_id = str(uuid.uuid4())
         with self.tracer.start_as_current_span(
             name=f"crew.execute.{crew_name}",
@@ -106,46 +112,66 @@ class CrewAITelemetry:
             # Store the active span
             self.active_spans[crew_id] = span
             
+            logger.info(f"Started trace with ID: {trace_id} for crew_id: {crew_id}")
+            logger.info(f"Total traces in storage: {len(traces_storage)}")
         return trace_id
     
     def end_crew_trace(self, crew_id: str, output: Any = None):
-        """End a crew execution trace.
+        """End a trace for a crew execution.
         
         Args:
             crew_id: The ID of the crew
             output: The output of the crew execution
         """
-        # Find the trace ID for this crew
+        # Ensure crew_id is a string
+        crew_id = str(crew_id).strip()
+        
+        logger.info(f"Ending trace for crew_id: {crew_id}")
+        
+        # Find the trace for this crew - try exact match first
         trace_id = None
-        for tid, trace_data in traces_storage.items():
-            if trace_data.get("crew_id") == crew_id:
+        for tid, trace in traces_storage.items():
+            if trace.get("crew_id") == crew_id:
                 trace_id = tid
                 break
         
-        if trace_id:
-            # Update the trace status
-            traces_storage[trace_id]["status"] = "completed"
-            traces_storage[trace_id]["end_time"] = datetime.utcnow().isoformat()
-            
-            # Add the output
-            if output:
-                try:
-                    # Try to convert to string if it's not already
-                    if not isinstance(output, str):
-                        output_str = str(output)
-                    else:
-                        output_str = output
-                        
-                    traces_storage[trace_id]["output"] = output_str
-                except Exception as e:
-                    logger.warning(f"Failed to convert output to string: {e}")
-                    traces_storage[trace_id]["output"] = "Output conversion failed"
-            
-            # Add a completion event
-            self.add_event(crew_id, "crew.completed", {
-                "status": "completed",
-                "timestamp": datetime.utcnow().isoformat()
-            })
+        # If no exact match, try case-insensitive comparison
+        if not trace_id:
+            normalized_crew_id = crew_id.lower()
+            for tid, trace in traces_storage.items():
+                if trace.get("crew_id") and str(trace.get("crew_id")).strip().lower() == normalized_crew_id:
+                    trace_id = tid
+                    # Update the crew_id to match the one we're using now for consistency
+                    traces_storage[tid]["crew_id"] = crew_id
+                    logger.info(f"Found trace with case-insensitive match, updated crew_id to: {crew_id}")
+                    break
+        
+        if not trace_id:
+            logger.error(f"No trace found for crew_id: {crew_id}")
+            return
+        
+        logger.info(f"Found trace with ID: {trace_id} for crew_id: {crew_id}")
+        
+        # Update the trace with the output
+        if output:
+            try:
+                output_text = output.raw if hasattr(output, 'raw') else str(output)
+                logger.info(f"Output length: {len(output_text) if output_text else 0}")
+                traces_storage[trace_id]["output"] = output_text
+            except Exception as e:
+                logger.warning(f"Failed to convert output to string: {e}")
+                traces_storage[trace_id]["output"] = "Output conversion failed"
+        
+        # Mark the trace as completed
+        traces_storage[trace_id]["status"] = "completed"
+        traces_storage[trace_id]["end_time"] = datetime.utcnow().isoformat()
+        
+        # End the span if it exists
+        if crew_id in self.active_spans:
+            self.active_spans[crew_id].end()
+            del self.active_spans[crew_id]
+        
+        logger.info(f"Completed trace with ID: {trace_id} for crew_id: {crew_id}")
     
     def start_agent_execution(self, crew_id: str, agent_id: str, agent_name: str, agent_role: str):
         """Start tracing an agent execution.
@@ -511,10 +537,48 @@ class CrewAITelemetry:
         Returns:
             A list of traces for the crew
         """
-        return [
+        logger.info(f"Looking for traces with crew_id: {crew_id}")
+        logger.info(f"Current traces in storage: {len(traces_storage)}")
+        
+        # Normalize the crew ID for comparison
+        normalized_crew_id = str(crew_id).strip().lower()
+        
+        # Debug: Log all crew IDs in storage
+        all_crew_ids = set(trace.get("crew_id") for trace in traces_storage.values())
+        logger.info(f"Available crew IDs in storage: {all_crew_ids}")
+        
+        # Try exact match first
+        traces = [
             trace for trace in traces_storage.values()
             if trace.get("crew_id") == crew_id
         ]
+        
+        # If no exact matches, try case-insensitive comparison
+        if not traces:
+            logger.info(f"No exact matches found, trying case-insensitive comparison for: {crew_id}")
+            traces = [
+                trace for trace in traces_storage.values()
+                if trace.get("crew_id") and str(trace.get("crew_id")).strip().lower() == normalized_crew_id
+            ]
+            
+        # If still no matches and crew_id looks like a simple name (e.g., "crew_0"), try to find any trace
+        # that might contain this as part of the crew name
+        if not traces and ("_" in crew_id or crew_id.isalnum()):
+            logger.info(f"No matches found, trying to match by crew name pattern: {crew_id}")
+            traces = [
+                trace for trace in traces_storage.values()
+                if trace.get("crew_name") and crew_id.lower() in str(trace.get("crew_name")).lower()
+            ]
+            
+            # If we found traces by name pattern, log this information
+            if traces:
+                logger.info(f"Found {len(traces)} traces by matching crew name pattern: {crew_id}")
+                # Log the actual crew IDs that were matched
+                matched_ids = set(trace.get("crew_id") for trace in traces)
+                logger.info(f"Matched crew IDs: {matched_ids}")
+        
+        logger.info(f"Found {len(traces)} traces for crew_id: {crew_id}")
+        return traces
 
 # Create a singleton instance
 telemetry_service = CrewAITelemetry()

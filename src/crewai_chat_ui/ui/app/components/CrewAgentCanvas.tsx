@@ -616,7 +616,12 @@ const CrewAgentCanvas: React.FC<CrewAgentCanvasProps> = ({
           variant="outline" 
           size="sm" 
           className="flex items-center gap-1"
-          onClick={() => navigate(`/kickoff/traces?crewId=${crewId}`)}
+          onClick={() => {
+            // Use the crew ID from the state (WebSocket data) if available, otherwise fall back to the prop
+            const effectiveCrewId = state.crew?.id || crewId;
+            console.log(`Using crew ID for traces: ${effectiveCrewId}`);
+            navigate(`/kickoff/traces?crewId=${effectiveCrewId}`);
+          }}
         >
           <ExternalLink className="h-4 w-4" />
           View Traces
