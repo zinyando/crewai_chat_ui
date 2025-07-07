@@ -377,15 +377,15 @@ export default function TracesPage() {
     switch (status.toLowerCase()) {
       case "running":
       case "initializing":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300";
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 border-blue-200 dark:border-blue-800";
       case "completed":
-        return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300";
+        return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300 border-green-200 dark:border-green-800";
       case "failed":
-        return "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300";
+        return "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300 border-red-200 dark:border-red-800";
       case "pending":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300";
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800";
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300";
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300 border-gray-200 dark:border-gray-800";
     }
   };
 
@@ -405,7 +405,7 @@ export default function TracesPage() {
     }
 
     if (traces.length === 0) {
-      return <div className="p-4 text-gray-500">No traces found.</div>;
+      return <div className="p-4 text-gray-500 dark:text-gray-400">No traces found.</div>;
     }
 
     return (
@@ -442,7 +442,7 @@ export default function TracesPage() {
                 {trace.status}
               </Badge>
             </div>
-            <div className="flex justify-between items-center text-xs text-gray-500 mt-1">
+            <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 mt-1">
               <div>{formatTime(trace.start_time)}</div>
               <div className="flex items-center">
                 <span className="mr-1">
@@ -574,7 +574,7 @@ export default function TracesPage() {
     const agents = Object.values(selectedTrace.agents);
 
     if (agents.length === 0) {
-      return <div className="p-4 text-gray-500">No agent data available.</div>;
+      return <div className="p-4 text-gray-500 dark:text-gray-400">No agent data available.</div>;
     }
 
     return (
@@ -582,7 +582,7 @@ export default function TracesPage() {
         <Accordion type="single" collapsible className="w-full">
           {agents.map((agent) => (
             <AccordionItem key={agent.id} value={agent.id}>
-              <AccordionTrigger className="hover:bg-gray-50 px-4">
+              <AccordionTrigger className="hover:bg-gray-50 dark:hover:bg-gray-800/50 px-4">
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center">
                     <Badge
@@ -592,34 +592,34 @@ export default function TracesPage() {
                       {agent.status}
                     </Badge>
                     <span className="ml-2 font-medium">{agent.name}</span>
-                    <span className="ml-2 text-sm text-gray-500">
+                    <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
                       ({agent.role})
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     {calculateDuration(agent.start_time, agent.end_time)}
                   </div>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 py-2 space-y-4">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="text-sm text-gray-500">Agent ID</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Agent ID</div>
                   <div className="text-sm font-mono">{agent.id}</div>
 
-                  <div className="text-sm text-gray-500">Start Time</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Start Time</div>
                   <div>{formatTime(agent.start_time)}</div>
 
                   {agent.end_time && (
                     <div className="grid grid-cols-2 col-span-2">
-                      <div className="text-sm text-gray-500">End Time</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">End Time</div>
                       <div>{formatTime(agent.end_time)}</div>
                     </div>
                   )}
 
                   {agent.output && (
                     <div className="col-span-2">
-                      <div className="text-sm text-gray-500 mb-1">Output</div>
-                      <div className="bg-gray-50 p-2 rounded-md text-sm whitespace-pre-wrap font-mono">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Output</div>
+                      <div className="bg-gray-50 dark:bg-gray-800/50 p-2 rounded-md text-sm whitespace-pre-wrap font-mono">
                         {agent.output}
                       </div>
                     </div>
@@ -627,21 +627,21 @@ export default function TracesPage() {
 
                   {agent.events.length > 0 && (
                     <div>
-                      <div className="text-sm text-gray-500 mb-1">Events</div>
-                      <div className="border rounded-md divide-y col-span-2">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Events</div>
+                      <div className="border rounded-md divide-y dark:divide-gray-700 col-span-2">
                         {agent.events.map((event, idx) => (
                           <div
                             key={idx}
-                            className="p-2 text-sm hover:bg-gray-50"
+                            className="p-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50"
                           >
                             <div className="flex justify-between">
                               <Badge variant="outline">{event.type}</Badge>
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
                                 {formatTime(event.timestamp)}
                               </span>
                             </div>
                             {Object.keys(event.data).length > 0 && (
-                              <div className="mt-1 text-xs font-mono bg-gray-50 p-1 rounded">
+                              <div className="mt-1 text-xs font-mono bg-gray-50 dark:bg-gray-800/50 p-1 rounded">
                                 {JSON.stringify(event.data, null, 2)}
                               </div>
                             )}
@@ -666,7 +666,7 @@ export default function TracesPage() {
     const tasks = Object.values(selectedTrace.tasks);
 
     if (tasks.length === 0) {
-      return <div className="p-4 text-gray-500">No task data available.</div>;
+      return <div className="p-4 text-gray-500 dark:text-gray-400">No task data available.</div>;
     }
 
     return (
@@ -674,7 +674,7 @@ export default function TracesPage() {
         <Accordion type="single" collapsible className="w-full">
           {tasks.map((task) => (
             <AccordionItem key={task.id} value={task.id}>
-              <AccordionTrigger className="hover:bg-gray-50 px-4">
+              <AccordionTrigger className="hover:bg-gray-50 dark:hover:bg-gray-800/50 px-4">
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center">
                     <Badge
@@ -687,39 +687,39 @@ export default function TracesPage() {
                       {task.description}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     {calculateDuration(task.start_time, task.end_time)}
                   </div>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 py-2 space-y-4">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="text-sm text-gray-500">Task ID</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Task ID</div>
                   <div className="text-sm font-mono">{task.id}</div>
 
                   {task.agent_id && (
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
                         Assigned Agent
                       </div>
                       <div className="text-sm font-mono">{task.agent_id}</div>
                     </div>
                   )}
 
-                  <div className="text-sm text-gray-500">Start Time</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Start Time</div>
                   <div>{formatTime(task.start_time)}</div>
 
                   {task.end_time && (
                     <div className="grid grid-cols-2 col-span-2">
-                      <div className="text-sm text-gray-500">End Time</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">End Time</div>
                       <div>{formatTime(task.end_time)}</div>
                     </div>
                   )}
 
                   {task.output && (
                     <div className="col-span-2">
-                      <div className="text-sm text-gray-500 mb-1">Output</div>
-                      <div className="bg-gray-50 p-2 rounded-md text-sm whitespace-pre-wrap font-mono">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Output</div>
+                      <div className="bg-gray-50 dark:bg-gray-800/50 p-2 rounded-md text-sm whitespace-pre-wrap font-mono">
                         {task.output}
                       </div>
                     </div>
@@ -727,21 +727,21 @@ export default function TracesPage() {
 
                   {task.events.length > 0 && (
                     <div>
-                      <div className="text-sm text-gray-500 mb-1">Events</div>
-                      <div className="border rounded-md divide-y col-span-2">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Events</div>
+                      <div className="border rounded-md divide-y dark:divide-gray-700 col-span-2">
                         {task.events.map((event, idx) => (
                           <div
                             key={idx}
-                            className="p-2 text-sm hover:bg-gray-50"
+                            className="p-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50"
                           >
                             <div className="flex justify-between">
                               <Badge variant="outline">{event.type}</Badge>
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
                                 {formatTime(event.timestamp)}
                               </span>
                             </div>
                             {Object.keys(event.data).length > 0 && (
-                              <div className="mt-1 text-xs font-mono bg-gray-50 p-1 rounded">
+                              <div className="mt-1 text-xs font-mono bg-gray-50 dark:bg-gray-800/50 p-1 rounded">
                                 {JSON.stringify(event.data, null, 2)}
                               </div>
                             )}
@@ -764,22 +764,22 @@ export default function TracesPage() {
     if (!selectedTrace) return null;
 
     if (selectedTrace.events.length === 0) {
-      return <div className="p-4 text-gray-500">No event data available.</div>;
+      return <div className="p-4 text-gray-500 dark:text-gray-400">No event data available.</div>;
     }
 
     return (
       <div className="space-y-4">
-        <div className="border rounded-md divide-y">
+        <div className="border rounded-md divide-y dark:divide-gray-700">
           {selectedTrace.events.map((event, idx) => (
-            <div key={idx} className="p-3 hover:bg-gray-50">
+            <div key={idx} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50">
               <div className="flex justify-between items-center">
                 <Badge variant="outline">{event.type}</Badge>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
                   {formatTime(event.timestamp)}
                 </span>
               </div>
               {Object.keys(event.data).length > 0 && (
-                <div className="mt-2 text-xs font-mono bg-gray-50 p-2 rounded">
+                <div className="mt-2 text-xs font-mono bg-gray-50 dark:bg-gray-800/50 p-2 rounded">
                   {JSON.stringify(event.data, null, 2)}
                 </div>
               )}
