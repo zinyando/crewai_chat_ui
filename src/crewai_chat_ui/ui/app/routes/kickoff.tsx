@@ -69,6 +69,11 @@ export default function Kickoff() {
         const data = await response.json();
         if (data.crews) {
           setCrews(data.crews);
+          
+          // Automatically select the first crew if none is selected
+          if (data.crews.length > 0 && !selectedCrewId) {
+            setSelectedCrewId(data.crews[0].id);
+          }
         }
       } catch (error) {
         console.error("Error fetching crews:", error);
@@ -81,9 +86,13 @@ export default function Kickoff() {
       setLoading(true);
       fetchCrews();
     } else {
+      // If crews are already loaded but no crew is selected, select the first one
+      if (crews.length > 0 && !selectedCrewId) {
+        setSelectedCrewId(crews[0].id);
+      }
       setLoading(false);
     }
-  }, [crews.length, setCrews]);
+  }, [crews.length, setCrews, selectedCrewId]);
 
   // Fetch crew details and required inputs when a crew is selected
   useEffect(() => {
