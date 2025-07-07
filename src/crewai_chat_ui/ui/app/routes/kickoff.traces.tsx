@@ -354,9 +354,10 @@ export default function TracesPage() {
                   )}
 
                   {agent.output && (
-                    <div>
+                    <div className="col-span-2">
                       <div className="text-sm text-gray-500 mb-1">Output</div>
-                      <div className="bg-gray-50 p-2 rounded-md text-sm whitespace-pre-wrap font-mono col-span-2">
+                      <div className="bg-gray-50 p-2 rounded-md text-sm whitespace-pre-wrap font-mono">
+                        {agent.output}
                       </div>
                     </div>
                   )}
@@ -453,9 +454,10 @@ export default function TracesPage() {
                   )}
 
                   {task.output && (
-                    <div>
+                    <div className="col-span-2">
                       <div className="text-sm text-gray-500 mb-1">Output</div>
-                      <div className="bg-gray-50 p-2 rounded-md text-sm whitespace-pre-wrap font-mono col-span-2">
+                      <div className="bg-gray-50 p-2 rounded-md text-sm whitespace-pre-wrap font-mono">
+                        {task.output}
                       </div>
                     </div>
                   )}

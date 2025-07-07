@@ -42,13 +42,28 @@ class CrewAITelemetry:
         )
         
         # Try to set up OTLP exporter if endpoint is available
+        # Check if collector is available before attempting to connect
+        import socket
+        collector_available = False
         try:
-            otlp_exporter = OTLPSpanExporter(endpoint="http://localhost:4318/v1/traces")
-            trace.get_tracer_provider().add_span_processor(
-                BatchSpanProcessor(otlp_exporter)
-            )
-        except Exception as e:
-            logger.warning(f"Failed to set up OTLP exporter: {e}")
+            # Try to connect to the collector with a short timeout
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(0.1)  # 100ms timeout
+            s.connect(('localhost', 4318))
+            s.close()
+            collector_available = True
+        except (socket.timeout, socket.error, ConnectionRefusedError):
+            logger.info("OpenTelemetry collector not available at localhost:4318, using console exporter only")
+        
+        if collector_available:
+            try:
+                otlp_exporter = OTLPSpanExporter(endpoint="http://localhost:4318/v1/traces")
+                trace.get_tracer_provider().add_span_processor(
+                    BatchSpanProcessor(otlp_exporter)
+                )
+                logger.info("Successfully connected to OpenTelemetry collector")
+            except Exception as e:
+                logger.warning(f"Failed to set up OTLP exporter: {e}")
         
         self.tracer = trace.get_tracer("crewai.telemetry")
         self.active_spans: Dict[str, Span] = {}
