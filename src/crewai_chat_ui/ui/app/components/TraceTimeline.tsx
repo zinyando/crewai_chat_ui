@@ -22,9 +22,10 @@ interface TraceTimelineProps {
 }
 
 const getBarColor = (span: TimelineSpan): string => {
-  if (span.name.toLowerCase().includes('crew')) return '#a855f7'; // purple
-  if (span.serviceName?.toLowerCase().includes('agent')) return '#22c55e'; // green
-  if (span.operation?.toLowerCase().includes('task')) return '#3b82f6'; // blue
+  const service = span.serviceName?.toLowerCase() || '';
+  if (service.includes('crew')) return '#a855f7'; // purple
+  if (service.includes('agent')) return '#22c55e'; // green
+  if (service.includes('task')) return '#3b82f6'; // blue
   return '#6b7280'; // gray for others
 };
 
@@ -182,7 +183,21 @@ export const TraceTimeline: React.FC<TraceTimelineProps> = ({ spans, onSpanClick
       .attr('y', rowHeight / 2)
       .attr('dy', '0.35em')
       .attr('fill', '#1f2937')
-      .text(d => d.name.length > 30 ? `${d.name.substring(0, 30)}...` : d.name);
+      .text(d => d.name)
+      .each(function(d) {
+        const self = d3.select(this);
+        const textNode = self.node();
+        if (!textNode) return;
+
+        const startX = d.depth * 20 + 35;
+        const availableWidth = margin.left - startX - 15; // 15px padding
+
+        let text = d.name;
+        while (textNode.getBBox().width > availableWidth && text.length > 3) {
+          text = text.slice(0, -1);
+          self.text(text + '...');
+        }
+      });
       
   }, [visibleSpans, onSpanClick, expandedSpans, toggleExpand]);
 
