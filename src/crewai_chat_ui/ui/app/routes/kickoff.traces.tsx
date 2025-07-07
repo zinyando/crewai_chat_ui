@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "../components/ui/card";
 import {
   Tabs,
@@ -13,7 +14,18 @@ import {
   TabsTrigger,
 } from "../components/ui/tabs";
 import { Badge } from "../components/ui/badge";
-import { Loader2, ChevronRight, ChevronDown, ArrowLeft, Moon, Sun } from "lucide-react";
+import {
+  Loader2,
+  ChevronRight,
+  ChevronDown,
+  ArrowLeft,
+  Moon,
+  Sun,
+  Clock,
+  List,
+  BarChart2,
+  Info,
+} from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
   Accordion,
@@ -22,6 +34,11 @@ import {
   AccordionTrigger,
 } from "../components/ui/accordion";
 import { useChatStore } from "../lib/store";
+import { TraceTimeline } from "../components/TraceTimeline";
+import { TraceSpanView } from "../components/TraceSpanView";
+import { TraceSpanDetail } from "../components/TraceSpanDetail";
+import { Separator } from "../components/ui/separator";
+import { ScrollArea } from "../components/ui/scroll-area";
 
 // Define trace data types
 interface TraceEvent {
@@ -65,6 +82,26 @@ interface Trace {
   tasks: Record<string, TraceTask>;
 }
 
+// Visualization data types
+interface TimelineSpan {
+  id: string;
+  name: string;
+  startTime: Date;
+  endTime: Date | null;
+  status: string;
+  parentId?: string;
+  children?: TimelineSpan[];
+  depth: number;
+  duration: number;
+  serviceName?: string;
+  operation?: string;
+  tags?: Record<string, any>;
+  logs?: Array<{
+    timestamp: Date;
+    fields: Record<string, any>;
+  }>;
+}
+
 export default function TracesPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode } = useChatStore();
@@ -75,10 +112,210 @@ export default function TracesPage() {
   const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("overview");
-  
+  const [activeTab, setActiveTab] = useState("timeline");
+  const [selectedSpan, setSelectedSpan] = useState<TimelineSpan | null>(null);
+
   const handleBack = () => {
     navigate("/kickoff");
+  };
+
+  // Transform trace data into timeline spans
+  const timelineSpans = useMemo(() => {
+    if (!selectedTrace) return [];
+
+    const spans: TimelineSpan[] = [];
+
+    // Add crew span as root
+    const crewStartTime = new Date(selectedTrace.start_time);
+    const crewEndTime = selectedTrace.end_time
+      ? new Date(selectedTrace.end_time)
+      : null;
+    const crewDuration = crewEndTime
+      ? crewEndTime.getTime() - crewStartTime.getTime()
+      : 0;
+
+    const crewSpan: TimelineSpan = {
+      id: selectedTrace.id,
+      name: `Crew: ${selectedTrace.crew_name}`,
+      startTime: crewStartTime,
+      endTime: crewEndTime,
+      status: selectedTrace.status,
+      depth: 0,
+      duration: crewDuration,
+      serviceName: "crew",
+      operation: "execution",
+      tags: {
+        crew_id: selectedTrace.crew_id,
+        status: selectedTrace.status,
+      },
+    };
+    spans.push(crewSpan);
+
+    // Add agent spans
+    Object.values(selectedTrace.agents).forEach((agent) => {
+      const agentStartTime = new Date(agent.start_time);
+      const agentEndTime = agent.end_time ? new Date(agent.end_time) : null;
+      const agentDuration = agentEndTime
+        ? agentEndTime.getTime() - agentStartTime.getTime()
+        : 0;
+
+      const agentSpan: TimelineSpan = {
+        id: agent.id,
+        name: `Agent: ${agent.name}`,
+        startTime: agentStartTime,
+        endTime: agentEndTime,
+        status: agent.status,
+        parentId: selectedTrace.id,
+        depth: 1,
+        duration: agentDuration,
+        serviceName: "agent",
+        operation: agent.role,
+        tags: {
+          agent_id: agent.id,
+          role: agent.role,
+          status: agent.status,
+        },
+      };
+      spans.push(agentSpan);
+    });
+
+    // Add task spans
+    Object.values(selectedTrace.tasks).forEach((task) => {
+      const taskStartTime = new Date(task.start_time);
+      const taskEndTime = task.end_time ? new Date(task.end_time) : null;
+      const taskDuration = taskEndTime
+        ? taskEndTime.getTime() - taskStartTime.getTime()
+        : 0;
+
+      const taskSpan: TimelineSpan = {
+        id: task.id,
+        name:
+          task.description.length > 30
+            ? `${task.description.substring(0, 30)}...`
+            : task.description,
+        startTime: taskStartTime,
+        endTime: taskEndTime,
+        status: task.status,
+        parentId: task.agent_id || selectedTrace.id,
+        depth: 2,
+        duration: taskDuration,
+        serviceName: "task",
+        operation: "execution",
+        tags: {
+          task_id: task.id,
+          description: task.description,
+          status: task.status,
+          agent_id: task.agent_id,
+        },
+      };
+      spans.push(taskSpan);
+    });
+
+    // Build parent-child relationships
+    const spanMap = new Map<string, TimelineSpan>();
+    spans.forEach((span) => spanMap.set(span.id, span));
+
+    spans.forEach((span) => {
+      if (span.parentId && spanMap.has(span.parentId)) {
+        const parent = spanMap.get(span.parentId)!;
+        if (!parent.children) parent.children = [];
+        parent.children.push(span);
+      }
+    });
+
+    return spans;
+  }, [selectedTrace]);
+
+  // Calculate total duration for timeline
+  const totalDuration = useMemo(() => {
+    if (!selectedTrace) return 0;
+    const startTime = new Date(selectedTrace.start_time).getTime();
+    const endTime = selectedTrace.end_time
+      ? new Date(selectedTrace.end_time).getTime()
+      : Date.now();
+    return endTime - startTime;
+  }, [selectedTrace]);
+
+  // Handle span selection
+  const handleSpanClick = (span: TimelineSpan) => {
+    setSelectedSpan(span);
+  };
+
+  // Render timeline visualization
+  const renderTimeline = () => {
+    if (!selectedTrace) return null;
+
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Timeline</CardTitle>
+            <CardDescription>
+              Visualization of execution spans over time
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TraceTimeline
+              spans={timelineSpans}
+              onSpanClick={handleSpanClick}
+            />
+          </CardContent>
+        </Card>
+
+        {selectedSpan && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Span Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TraceSpanDetail span={selectedSpan} />
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
+  // Render hierarchical span view
+  const renderSpans = () => {
+    if (!selectedTrace) return null;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Spans</CardTitle>
+                <CardDescription>
+                  Hierarchical view of execution spans
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[500px]">
+                  <TraceSpanView
+                    spans={timelineSpans}
+                    totalDuration={totalDuration}
+                    onSpanClick={handleSpanClick}
+                  />
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Span Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TraceSpanDetail span={selectedSpan} />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // Fetch traces on component mount
@@ -86,27 +323,17 @@ export default function TracesPage() {
     async function fetchTraces() {
       try {
         setLoading(true);
-        setError(null);
-
-        // If crewId is provided, fetch traces for that crew
-        // Otherwise, fetch all recent traces
-        const endpoint = crewId ? `/api/crews/${crewId}/traces` : "/api/traces";
-
-        const response = await fetch(endpoint);
-
+        const response = await fetch(`/api/crews/${crewId}/traces`);
         if (!response.ok) {
           throw new Error(`Failed to fetch traces: ${response.statusText}`);
         }
-
         const data = await response.json();
         setTraces(data);
-
-        // Select the first trace by default if available
+        // Select the first trace by default
         if (data.length > 0) {
           setSelectedTrace(data[0]);
         }
       } catch (err) {
-        console.error("Error fetching traces:", err);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setLoading(false);
@@ -166,20 +393,19 @@ export default function TracesPage() {
   const renderTraceList = () => {
     if (loading) {
       return (
-        <div className="flex justify-center items-center p-8">
-          <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="flex items-center justify-center p-4">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          <span>Loading traces...</span>
         </div>
       );
     }
 
     if (error) {
-      return <div className="p-4 text-red-500">Error: {error}</div>;
+      return <div className="p-4 text-red-500">{error}</div>;
     }
 
     if (traces.length === 0) {
-      return (
-        <div className="p-4 text-gray-500">No traces found.</div>
-      );
+      return <div className="p-4 text-gray-500">No traces found.</div>;
     }
 
     return (
@@ -187,21 +413,43 @@ export default function TracesPage() {
         {traces.map((trace) => (
           <div
             key={trace.id}
-            className={`p-3 border rounded-md cursor-pointer hover:bg-gray-50 ${
-              selectedTrace?.id === trace.id ? "border-blue-500 bg-blue-50" : ""
+            className={`p-3 border rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${
+              selectedTrace?.id === trace.id
+                ? "border-primary bg-gray-50 dark:bg-gray-800"
+                : ""
             }`}
-            onClick={() => setSelectedTrace(trace)}
+            onClick={() => {
+              setSelectedTrace(trace);
+              setSelectedSpan(null); // Reset selected span when changing traces
+            }}
           >
             <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-medium">{trace.crew_name}</h3>
-                <p className="text-sm text-gray-500">
-                  {formatTime(trace.start_time)}
-                </p>
-              </div>
-              <Badge className={getStatusColor(trace.status)}>
+              <div className="font-medium">{trace.crew_name}</div>
+              <Badge
+                variant={
+                  trace.status === "completed"
+                    ? "outline"
+                    : trace.status === "running"
+                    ? "default"
+                    : "destructive"
+                }
+                className={
+                  trace.status === "completed"
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                    : ""
+                }
+              >
                 {trace.status}
               </Badge>
+            </div>
+            <div className="flex justify-between items-center text-xs text-gray-500 mt-1">
+              <div>{formatTime(trace.start_time)}</div>
+              <div className="flex items-center">
+                <span className="mr-1">
+                  {Object.keys(trace.agents).length} agents
+                </span>
+                <span>{Object.keys(trace.tasks).length} tasks</span>
+              </div>
             </div>
           </div>
         ))}
@@ -549,7 +797,11 @@ export default function TracesPage() {
             onClick={toggleDarkMode}
             className="h-8 w-8"
           >
-            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {isDarkMode ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </header>
@@ -578,25 +830,50 @@ export default function TracesPage() {
                 </CardHeader>
                 <CardContent>
                   <Tabs
-                    defaultValue="overview"
+                    defaultValue="timeline"
                     value={activeTab}
                     onValueChange={setActiveTab}
                     className="w-full"
                   >
-                    <TabsList className="grid grid-cols-4 mb-4">
-                      <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsList className="grid grid-cols-5 mb-4">
+                      <TabsTrigger
+                        value="timeline"
+                        className="flex items-center gap-1"
+                      >
+                        <BarChart2 className="h-4 w-4" />
+                        <span>Timeline</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="spans"
+                        className="flex items-center gap-1"
+                      >
+                        <List className="h-4 w-4" />
+                        <span>Spans</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="overview"
+                        className="flex items-center gap-1"
+                      >
+                        <Info className="h-4 w-4" />
+                        <span>Overview</span>
+                      </TabsTrigger>
                       <TabsTrigger value="agents">Agents</TabsTrigger>
                       <TabsTrigger value="tasks">Tasks</TabsTrigger>
-                      <TabsTrigger value="events">Events</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="overview">{renderOverview()}</TabsContent>
+                    <TabsContent value="timeline">
+                      {renderTimeline()}
+                    </TabsContent>
+
+                    <TabsContent value="spans">{renderSpans()}</TabsContent>
+
+                    <TabsContent value="overview">
+                      {renderOverview()}
+                    </TabsContent>
 
                     <TabsContent value="agents">{renderAgents()}</TabsContent>
 
                     <TabsContent value="tasks">{renderTasks()}</TabsContent>
-
-                    <TabsContent value="events">{renderEvents()}</TabsContent>
                   </Tabs>
                 </CardContent>
               </Card>
