@@ -30,8 +30,8 @@ const getBarColor = (span: TimelineSpan): string => {
 };
 
 // A simple icon for agents/crew
-const UserIcon = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+const UserIcon = (color: string) => `
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
     <circle cx="9" cy="7" r="4"/>
   </svg>
@@ -175,7 +175,13 @@ export const TraceTimeline: React.FC<TraceTimelineProps> = ({ spans, onSpanClick
     // Icon
     labels.append('g')
       .attr('transform', d => `translate(${d.depth * 20 + 15}, ${(rowHeight - 14)/2})`)
-      .html(d => (d.name.includes('crew') || d.serviceName?.includes('agent')) ? UserIcon : '');
+      .html(d => {
+        const service = d.serviceName?.toLowerCase() || '';
+        if (service.includes('crew') || service.includes('agent')) {
+          return UserIcon(getBarColor(d));
+        }
+        return '';
+      });
 
     // Span name
     labels.append('text')
