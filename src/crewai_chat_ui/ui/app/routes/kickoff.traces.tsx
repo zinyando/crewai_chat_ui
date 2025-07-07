@@ -541,28 +541,34 @@ export default function TracesPage() {
         </div>
 
         {/* Timeline visualization */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Timeline</h3>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Execution Timeline</CardTitle>
+            <CardDescription>
+              A hierarchical view of the execution spans
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TraceTimeline
+              spans={timelineSpans}
+              onSpanClick={handleSpanClick}
+            />
+          </CardContent>
+        </Card>
+
+        {selectedSpan && (
           <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Span Details</CardTitle>
+              <CardDescription>
+                Detailed information for the selected span: {selectedSpan.name}
+              </CardDescription>
+            </CardHeader>
             <CardContent>
-              <TraceTimeline
-                spans={timelineSpans}
-                onSpanClick={handleSpanClick}
-              />
+              <TraceSpanDetail span={selectedSpan} />
             </CardContent>
           </Card>
-
-          {selectedSpan && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Span Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <TraceSpanDetail span={selectedSpan} />
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        )}
       </div>
     );
   };
