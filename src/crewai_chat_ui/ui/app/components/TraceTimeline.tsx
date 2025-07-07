@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
+// Enhanced TimelineSpan to include children for hierarchy
 interface TimelineSpan {
   id: string;
   name: string;
@@ -8,16 +9,11 @@ interface TimelineSpan {
   endTime: Date | null;
   status: string;
   parentId?: string;
-  children?: TimelineSpan[];
+  children: TimelineSpan[];
   depth: number;
   duration: number;
   serviceName?: string;
   operation?: string;
-  tags?: Record<string, any>;
-  logs?: Array<{
-    timestamp: Date;
-    fields: Record<string, any>;
-  }>;
 }
 
 interface TraceTimelineProps {
@@ -25,175 +21,181 @@ interface TraceTimelineProps {
   onSpanClick?: (span: TimelineSpan) => void;
 }
 
-const statusColors: Record<string, string> = {
-  completed: '#22c55e', // green
-  running: '#3b82f6',   // blue
-  pending: '#f59e0b',   // amber
-  failed: '#ef4444',    // red
-  default: '#6b7280',   // gray
+const getBarColor = (span: TimelineSpan): string => {
+  if (span.name.toLowerCase().includes('crew')) return '#a855f7'; // purple
+  if (span.serviceName?.toLowerCase().includes('agent')) return '#22c55e'; // green
+  if (span.operation?.toLowerCase().includes('task')) return '#3b82f6'; // blue
+  return '#6b7280'; // gray for others
 };
 
-const getStatusColor = (status: string): string => {
-  return statusColors[status.toLowerCase()] || statusColors.default;
-};
+// A simple icon for agents/crew
+const UserIcon = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+  </svg>
+`;
 
 export const TraceTimeline: React.FC<TraceTimelineProps> = ({ spans, onSpanClick }) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [expandedSpans, setExpandedSpans] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    if (!spans.length || !svgRef.current) return;
+  // Build a tree and a flat list of visible spans
+  const visibleSpans = useMemo(() => {
+    const spanMap: Record<string, TimelineSpan> = {};
+    spans.forEach(s => {
+      spanMap[s.id] = { ...s, children: [], depth: 0 };
+    });
 
-    // Clear previous content
-    d3.select(svgRef.current).selectAll('*').remove();
-
-    // Sort spans by start time
-    const sortedSpans = [...spans].sort((a, b) => 
-      a.startTime.getTime() - b.startTime.getTime()
-    );
-
-    // Find the earliest start time and latest end time
-    const minTime = d3.min(sortedSpans, d => d.startTime) as Date;
-    const maxTime = d3.max(sortedSpans, d => 
-      d.endTime ? d.endTime : new Date()
-    ) as Date;
-
-    // Add a small buffer to the time range
-    const timeBuffer = (maxTime.getTime() - minTime.getTime()) * 0.05;
-    const adjustedMinTime = new Date(minTime.getTime() - timeBuffer);
-    const adjustedMaxTime = new Date(maxTime.getTime() + timeBuffer);
-
-    // Calculate dimensions
-    const margin = { top: 20, right: 30, bottom: 30, left: 100 };
-    const width = svgRef.current.clientWidth - margin.left - margin.right;
-    const rowHeight = 30;
-    const height = (sortedSpans.length * rowHeight) + margin.top + margin.bottom;
-
-    // Create scales
-    const xScale = d3.scaleTime()
-      .domain([adjustedMinTime, adjustedMaxTime])
-      .range([0, width]);
-
-    const yScale = d3.scaleBand()
-      .domain(sortedSpans.map(d => d.id))
-      .range([0, sortedSpans.length * rowHeight])
-      .padding(0.1);
-
-    // Create SVG
-    const svg = d3.select(svgRef.current)
-      .attr('width', width + margin.left + margin.right)
-      .attr('height', height)
-      .append('g')
-      .attr('transform', `translate(${margin.left},${margin.top})`);
-
-    // Add X axis
-    const xAxis = d3.axisBottom(xScale)
-      .ticks(5)
-      .tickFormat(d3.timeFormat('%H:%M:%S') as any);
-
-    svg.append('g')
-      .attr('transform', `translate(0,${sortedSpans.length * rowHeight})`)
-      .call(xAxis);
-
-    // Add Y axis (span names)
-    svg.append('g')
-      .call(d3.axisLeft(yScale).tickFormat((d: any) => {
-        const span = sortedSpans.find(s => s.id === d);
-        return span ? span.name : '';
-      }));
-
-    // Add grid lines
-    svg.append('g')
-      .attr('class', 'grid')
-      .attr('transform', `translate(0,${sortedSpans.length * rowHeight})`)
-      .call(
-        d3.axisBottom(xScale)
-          .ticks(10)
-          .tickSize(-sortedSpans.length * rowHeight)
-          .tickFormat(() => '')
-      )
-      .attr('stroke-opacity', 0.1);
-
-    // Add spans as rectangles
-    const bars = svg.selectAll('.bar')
-      .data(sortedSpans)
-      .enter()
-      .append('g')
-      .attr('class', 'bar')
-      .style('cursor', 'pointer')
-      .on('click', (event, d) => {
-        if (onSpanClick) onSpanClick(d);
-      });
-
-    // Add span bars
-    bars.append('rect')
-      .attr('x', d => xScale(d.startTime))
-      .attr('y', d => yScale(d.id) || 0)
-      .attr('width', d => {
-        const endTime = d.endTime || new Date();
-        return Math.max(xScale(endTime) - xScale(d.startTime), 3); // Minimum width of 3px
-      })
-      .attr('height', yScale.bandwidth())
-      .attr('fill', d => getStatusColor(d.status))
-      .attr('rx', 3) // Rounded corners
-      .attr('ry', 3);
-
-    // Add span labels inside bars (if there's enough space)
-    bars.append('text')
-      .attr('x', d => {
-        const endTime = d.endTime || new Date();
-        const spanWidth = xScale(endTime) - xScale(d.startTime);
-        return xScale(d.startTime) + 5; // 5px padding
-      })
-      .attr('y', d => (yScale(d.id) || 0) + yScale.bandwidth() / 2)
-      .attr('dy', '0.35em') // Vertical centering
-      .attr('fill', 'white')
-      .style('font-size', '10px')
-      .style('pointer-events', 'none')
-      .text(d => {
-        const endTime = d.endTime || new Date();
-        const spanWidth = xScale(endTime) - xScale(d.startTime);
-        // Only show text if there's enough space
-        if (spanWidth > 50) {
-          const durationMs = endTime.getTime() - d.startTime.getTime();
-          const durationText = durationMs < 1000 
-            ? `${durationMs}ms` 
-            : `${(durationMs / 1000).toFixed(1)}s`;
-          return `${d.name} (${durationText})`;
-        }
-        return '';
-      });
-
-    // Add connecting lines for parent-child relationships
-    sortedSpans.forEach(span => {
-      if (span.parentId) {
-        const parent = sortedSpans.find(s => s.id === span.parentId);
-        if (parent) {
-          svg.append('path')
-            .attr('d', () => {
-              const parentY = (yScale(parent.id) || 0) + yScale.bandwidth();
-              const childY = yScale(span.id) || 0;
-              const x = xScale(span.startTime);
-              return `M${x},${parentY} L${x},${childY}`;
-            })
-            .attr('stroke', '#9ca3af')
-            .attr('stroke-width', 1)
-            .attr('stroke-dasharray', '3,3')
-            .attr('fill', 'none');
-        }
+    const roots: TimelineSpan[] = [];
+    spans.forEach(s => {
+      if (s.parentId && spanMap[s.parentId]) {
+        spanMap[s.parentId].children.push(spanMap[s.id]);
+      } else {
+        roots.push(spanMap[s.id]);
       }
     });
 
-  }, [spans, onSpanClick]);
+    // Set initial expansion state
+    if (Object.keys(expandedSpans).length === 0 && spans.length > 0) {
+      const initialExpanded: Record<string, boolean> = {};
+      spans.forEach(s => {
+        if (s.children && s.children.length > 0) {
+          initialExpanded[s.id] = true; // Expand all by default
+        }
+      });
+      setExpandedSpans(initialExpanded);
+    }
+
+    const flatten = (nodes: TimelineSpan[], depth = 0): TimelineSpan[] => {
+      return nodes.reduce((acc, node) => {
+        node.depth = depth;
+        acc.push(node);
+        if (expandedSpans[node.id] && node.children) {
+          acc.push(...flatten(node.children, depth + 1));
+        }
+        return acc;
+      }, [] as TimelineSpan[]);
+    };
+
+    return flatten(roots);
+  }, [spans, expandedSpans]);
+
+  const toggleExpand = (spanId: string) => {
+    setExpandedSpans(prev => ({ ...prev, [spanId]: !prev[spanId] }));
+  };
+
+  useEffect(() => {
+    if (!visibleSpans.length || !svgRef.current) return;
+
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('*').remove();
+
+    const margin = { top: 20, right: 30, bottom: 40, left: 250 };
+    const rowHeight = 32;
+    const height = visibleSpans.length * rowHeight + margin.top + margin.bottom;
+    const width = (svgRef.current.parentElement?.clientWidth || 800) - margin.left - margin.right;
+
+    svg.attr('width', width + margin.left + margin.right).attr('height', height);
+    const chart = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const minTime = d3.min(visibleSpans, d => d.startTime) as Date;
+    const maxTime = d3.max(visibleSpans, d => d.endTime || new Date()) as Date;
+
+    const xScale = d3.scaleTime().domain([minTime, maxTime]).range([0, width]);
+
+    // X-axis
+    const xAxis = d3.axisBottom(xScale)
+      .ticks(5)
+      .tickFormat(d => `${(d.valueOf() - minTime.valueOf()) / 1000}s`);
+    
+    svg.append('g')
+      .attr('transform', `translate(${margin.left}, ${height - margin.bottom + 5})`)
+      .call(xAxis)
+      .attr('color', '#6b7280');
+
+    // Rows
+    const rows = chart.selectAll('.row')
+      .data(visibleSpans, (d: any) => d.id)
+      .enter()
+      .append('g')
+      .attr('class', 'row')
+      .attr('transform', (d, i) => `translate(0, ${i * rowHeight})`)
+      .style('cursor', 'pointer')
+      .on('click', (event, d) => onSpanClick?.(d));
+
+    // Bars
+    rows.append('rect')
+      .attr('x', d => xScale(d.startTime))
+      .attr('width', d => {
+        const w = xScale(d.endTime || new Date()) - xScale(d.startTime);
+        return Math.max(w, 2);
+      })
+      .attr('height', rowHeight - 12)
+      .attr('y', 6)
+      .attr('fill', d => getBarColor(d))
+      .attr('rx', 4)
+      .attr('ry', 4);
+
+    // Duration text on bars
+    rows.append('text')
+      .attr('x', d => xScale(d.endTime || new Date()) - 5)
+      .attr('y', rowHeight / 2)
+      .attr('dy', '0.35em')
+      .attr('text-anchor', 'end')
+      .attr('fill', 'white')
+      .style('font-size', '12px')
+      .text(d => `${d.duration.toFixed(2)}s`);
+
+    // Labels on the left
+    const labels = svg.append('g')
+      .attr('transform', `translate(0, ${margin.top})`)
+      .selectAll('.label')
+      .data(visibleSpans, (d: any) => d.id)
+      .enter()
+      .append('g')
+      .attr('class', 'label')
+      .attr('transform', (d, i) => `translate(0, ${i * rowHeight})`);
+
+    // Toggle expand/collapse
+    labels.append('g')
+      .attr('transform', d => `translate(${d.depth * 20}, 0)`)
+      .style('cursor', 'pointer')
+      .on('click', (event, d) => {
+        event.stopPropagation();
+        if (d.children.length > 0) toggleExpand(d.id);
+      })
+      .html(d => {
+        if (d.children.length === 0) return '';
+        const rotation = expandedSpans[d.id] ? 90 : 0;
+        return `<svg width="16" height="${rowHeight}" viewBox="0 0 16 16"><path transform="translate(8, ${rowHeight/2}) rotate(${rotation})" d="M-3 4 L3 0 L-3 -4" fill="#6b7280"></path></svg>`;
+      });
+
+    // Icon
+    labels.append('g')
+      .attr('transform', d => `translate(${d.depth * 20 + 15}, ${(rowHeight - 14)/2})`)
+      .html(d => (d.name.includes('crew') || d.serviceName?.includes('agent')) ? UserIcon : '');
+
+    // Span name
+    labels.append('text')
+      .attr('x', d => d.depth * 20 + 35)
+      .attr('y', rowHeight / 2)
+      .attr('dy', '0.35em')
+      .attr('fill', '#1f2937')
+      .text(d => d.name.length > 30 ? `${d.name.substring(0, 30)}...` : d.name);
+      
+  }, [visibleSpans, onSpanClick, expandedSpans, toggleExpand]);
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto bg-white rounded-lg p-4">
       <svg 
         ref={svgRef} 
         className="w-full" 
-        style={{ minHeight: `${spans.length * 30 + 50}px`, minWidth: '500px' }}
+        style={{ minWidth: '800px' }}
       />
     </div>
   );
 };
 
 export default TraceTimeline;
+
