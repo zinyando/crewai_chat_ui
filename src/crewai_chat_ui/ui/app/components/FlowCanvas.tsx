@@ -23,6 +23,7 @@ interface FlowCanvasProps {
   flowId: string;
   isRunning: boolean;
   resetKey: number; // Key to trigger reset
+  viewMode?: 'init' | 'execution'; // New prop to control view mode
 }
 
 interface FlowState {
@@ -160,13 +161,52 @@ const OutputNode = ({ data }: { data: any }) => {
   );
 };
 
-const FlowCanvas = ({ flowId, isRunning, resetKey }: FlowCanvasProps) => {
+// Method node for initialization view
+const MethodNode = ({ data }: { data: any }) => {
+  return (
+    <div className="px-4 py-2 shadow-md rounded-md border bg-card min-w-[200px]">
+      <div className="flex flex-col">
+        <div className="flex items-center">
+          {data.is_step && (
+            <Badge variant="secondary" className="mr-2">
+              Step
+            </Badge>
+          )}
+          <div className="font-bold">{data.label}</div>
+        </div>
+        {data.description && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            {data.description}
+          </div>
+        )}
+        {data.dependencies && data.dependencies.length > 0 && (
+          <div className="mt-2 text-xs">
+            <span className="font-medium">Dependencies:</span>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {data.dependencies.map((dep: string) => (
+                <Badge key={dep} variant="outline" className="text-xs">
+                  {dep}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: FlowCanvasProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [state, setState] = useState<FlowState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // State for initialization view
+  const [flowStructure, setFlowStructure] = useState<any>(null);
+  const [loadingStructure, setLoadingStructure] = useState(false);
 
   // Reset state when resetKey changes
   useEffect(() => {
@@ -174,6 +214,7 @@ const FlowCanvas = ({ flowId, isRunning, resetKey }: FlowCanvasProps) => {
     setError(null);
     setNodes([]);
     setEdges([]);
+    setFlowStructure(null);
 
     // Close existing socket if any
     if (socket) {
@@ -182,9 +223,64 @@ const FlowCanvas = ({ flowId, isRunning, resetKey }: FlowCanvasProps) => {
     }
   }, [resetKey, setNodes, setEdges]);
 
+  // Fetch flow structure for initialization view
+  useEffect(() => {
+    if (!flowId || viewMode !== 'init') return;
+    
+    const fetchFlowStructure = async () => {
+      setLoadingStructure(true);
+      setError(null);
+      
+      try {
+        // First check if the flow exists
+        const flowsResponse = await fetch('/api/flows');
+        const flowsData = await flowsResponse.json();
+        
+        if (flowsData.status === 'success') {
+          const flowExists = flowsData.flows.some((flow: any) => flow.id === flowId);
+          
+          if (!flowExists) {
+            setError(`Flow with ID ${flowId} not found. Please select a valid flow.`);
+            setLoadingStructure(false);
+            return;
+          }
+        }
+        
+        // Fetch the flow structure
+        const response = await fetch(`/api/flows/${flowId}/structure`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError(`Flow with ID ${flowId} not found. Please select a valid flow.`);
+          } else {
+            setError(`Error fetching flow structure: ${response.statusText}`);
+          }
+          setLoadingStructure(false);
+          return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.flow) {
+          setFlowStructure(data.flow);
+          createInitializationVisualization(data.flow);
+        } else {
+          setError(data.detail || 'Failed to fetch flow structure');
+        }
+      } catch (err) {
+        console.error('Error fetching flow structure:', err);
+        setError('Failed to fetch flow structure. Please try again.');
+      } finally {
+        setLoadingStructure(false);
+      }
+    };
+    
+    fetchFlowStructure();
+  }, [flowId, viewMode]);
+
   // Connect to WebSocket when flowId changes or isRunning becomes true
   useEffect(() => {
-    if (!flowId || !isRunning) return;
+    if (!flowId || !isRunning || viewMode !== 'execution') return;
 
     setLoading(true);
     setError(null);
@@ -235,9 +331,9 @@ const FlowCanvas = ({ flowId, isRunning, resetKey }: FlowCanvasProps) => {
     };
   }, [flowId, isRunning, resetKey]);
 
-  // Create nodes and edges based on flow state
+  // Create nodes and edges based on flow state for execution view
   useEffect(() => {
-    if (!state) return;
+    if (!state || viewMode !== 'execution') return;
 
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
@@ -368,15 +464,158 @@ const FlowCanvas = ({ flowId, isRunning, resetKey }: FlowCanvasProps) => {
         return "#9e9e9e"; // Gray
     }
   };
+  
+  // Create visualization for initialization view
+  const createInitializationVisualization = (flowData: any) => {
+    if (!flowData) return;
+    
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
+    
+    // Create flow node (main/root node)
+    const flowNode: Node = {
+      id: `flow-${flowData.id}`,
+      type: "flowNode",
+      position: { x: 400, y: 50 },
+      data: {
+        label: flowData.name,
+        status: "pending",
+        id: flowData.id,
+      },
+    };
+    newNodes.push(flowNode);
+    
+    // Process methods to determine hierarchical levels
+    const methods = flowData.methods || [];
+    const stepMethods = methods.filter((m: any) => m.is_step);
+    const nonStepMethods = methods.filter((m: any) => !m.is_step);
+    
+    // Create a map of method dependencies
+    const dependencyMap = new Map();
+    methods.forEach((method: any) => {
+      dependencyMap.set(method.id, method.dependencies || []);
+    });
+    
+    // Calculate levels for non-step methods based on dependencies
+    const levels: any[] = [];
+    const processedMethods = new Set();
+    
+    // Add step methods to level 0
+    if (stepMethods.length > 0) {
+      levels[0] = stepMethods;
+      stepMethods.forEach((m: any) => processedMethods.add(m.id));
+    }
+    
+    // Process remaining methods by dependencies
+    let currentLevel = 1;
+    let allProcessed = false;
+    
+    while (!allProcessed) {
+      const methodsForCurrentLevel = nonStepMethods.filter((m: any) => {
+        if (processedMethods.has(m.id)) return false;
+        
+        // Check if all dependencies are already processed
+        const deps = dependencyMap.get(m.id) || [];
+        return deps.every((dep: string) => processedMethods.has(dep) || !dependencyMap.has(dep));
+      });
+      
+      if (methodsForCurrentLevel.length > 0) {
+        levels[currentLevel] = methodsForCurrentLevel;
+        methodsForCurrentLevel.forEach((m: any) => processedMethods.add(m.id));
+        currentLevel++;
+      } else {
+        // Handle remaining methods (possible circular dependencies)
+        const remainingMethods = nonStepMethods.filter((m: any) => !processedMethods.has(m.id));
+        if (remainingMethods.length > 0) {
+          levels[currentLevel] = remainingMethods;
+          // Add each method ID individually instead of using spread operator
+          remainingMethods.forEach((m: any) => processedMethods.add(m.id));
+        }
+        break;
+      }
+      
+      // Check if all methods are processed
+      allProcessed = methods.every((m: any) => processedMethods.has(m.id));
+    }
+    
+    // Position nodes based on levels
+    levels.forEach((methodsInLevel, level) => {
+      const y = 150 + level * 150;
+      const methodCount = methodsInLevel.length;
+      const totalWidth = methodCount * 250;
+      const startX = 400 - totalWidth / 2 + 125;
+      
+      methodsInLevel.forEach((method: any, index: number) => {
+        const methodNode: Node = {
+          id: `method-${method.id}`,
+          type: "methodNode",
+          position: { x: startX + index * 250, y },
+          data: {
+            label: method.name,
+            description: method.description,
+            is_step: method.is_step,
+            dependencies: method.dependencies,
+            id: method.id,
+          },
+        };
+        newNodes.push(methodNode);
+        
+        // Create edge from flow to step methods
+        if (method.is_step) {
+          newEdges.push({
+            id: `flow-to-${method.id}`,
+            source: `flow-${flowData.id}`,
+            target: `method-${method.id}`,
+            type: "smoothstep",
+            style: {
+              stroke: "#2196f3",
+              strokeWidth: 2,
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: "#2196f3",
+            },
+          });
+        }
+        
+        // Create edges for dependencies
+        if (method.dependencies && method.dependencies.length > 0) {
+          method.dependencies.forEach((depId: string) => {
+            // Only create edges for dependencies that exist in our methods
+            if (methods.some((m: any) => m.id === depId)) {
+              newEdges.push({
+                id: `${depId}-to-${method.id}`,
+                source: `method-${depId}`,
+                target: `method-${method.id}`,
+                type: "smoothstep",
+                style: {
+                  stroke: "#ff9800",
+                  strokeWidth: 2,
+                  strokeDasharray: "5 5",
+                },
+                markerEnd: {
+                  type: MarkerType.ArrowClosed,
+                  color: "#ff9800",
+                },
+              });
+            }
+          });
+        }
+      });
+    });
+    
+    setNodes(newNodes);
+    setEdges(newEdges);
+  };
 
   return (
     <div className="w-full h-[calc(100vh-180px)] border rounded-lg overflow-hidden bg-background">
-      {loading && (
+      {(loading || loadingStructure) && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-background/80">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
             <p className="text-sm text-muted-foreground">
-              Connecting to flow execution...
+              {viewMode === 'execution' ? 'Connecting to flow execution...' : 'Loading flow structure...'}
             </p>
           </div>
         </div>
@@ -389,12 +628,23 @@ const FlowCanvas = ({ flowId, isRunning, resetKey }: FlowCanvasProps) => {
         </Alert>
       )}
 
-      {!isRunning && !state && !loading && (
+      {viewMode === 'execution' && !isRunning && !state && !loading && (
         <div className="flex items-center justify-center h-full">
           <div className="text-center max-w-md">
-            <h3 className="text-lg font-medium mb-2">Flow Visualization</h3>
+            <h3 className="text-lg font-medium mb-2">Flow Execution Visualization</h3>
             <p className="text-sm text-muted-foreground">
               Run the flow to see its execution visualized here.
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {viewMode === 'init' && !flowStructure && !loadingStructure && !error && (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center max-w-md">
+            <h3 className="text-lg font-medium mb-2">Flow Structure Visualization</h3>
+            <p className="text-sm text-muted-foreground">
+              Select a flow to visualize its structure.
             </p>
           </div>
         </div>
@@ -445,6 +695,7 @@ const nodeTypes: NodeTypes = {
   flowNode: FlowNode,
   stepNode: StepNode,
   outputNode: OutputNode,
+  methodNode: MethodNode,
 };
 
 export default FlowCanvas;
