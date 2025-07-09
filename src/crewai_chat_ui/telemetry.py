@@ -67,6 +67,47 @@ class CrewAITelemetry:
         
         self.tracer = trace.get_tracer("crewai.telemetry")
         self.active_spans: Dict[str, Span] = {}
+        # Map crew_id -> currently active trace id (latest run)
+        self._current_trace_for_crew: Dict[str, str] = {}
+
+    def _get_trace_id_for_crew(self, crew_id: str, prefer_running: bool = True) -> Optional[str]:
+        """Return the trace id that should be used for this crew.
+
+        If *prefer_running* is True, the most recent trace whose status is not
+        "completed" is returned. Otherwise the most recent trace regardless of
+        status is returned.  A *None* is returned when no trace exists for the
+        crew.
+        """
+        # 1. Fast path – did we record the id when the trace was started?
+        cached = self._current_trace_for_crew.get(crew_id)
+        if cached and cached in traces_storage:
+            if not prefer_running or traces_storage[cached]["status"] != "completed":
+                return cached
+
+        # 2. Scan storage to find all traces for this crew
+        candidates = [
+            (tid, tdata)
+            for tid, tdata in traces_storage.items()
+            if str(tdata.get("crew_id")) == str(crew_id)
+        ]
+        if not candidates:
+            return None
+
+        # Prefer running traces
+        if prefer_running:
+            running = [c for c in candidates if c[1].get("status") != "completed"]
+            if running:
+                # choose latest by start_time
+                running.sort(key=lambda x: x[1].get("start_time", ""))
+                trace_id = running[-1][0]
+                self._current_trace_for_crew[crew_id] = trace_id
+                return trace_id
+
+        # Fallback: choose latest by start_time
+        candidates.sort(key=lambda x: x[1].get("start_time", ""))
+        trace_id = candidates[-1][0]
+        self._current_trace_for_crew[crew_id] = trace_id
+        return trace_id
         
     def start_crew_trace(self, crew_id: str, crew_name: str) -> str:
         """Start a new trace for a crew execution.
@@ -111,6 +152,8 @@ class CrewAITelemetry:
             
             # Store the active span
             self.active_spans[crew_id] = span
+            # Remember this trace as the current active one for the crew
+            self._current_trace_for_crew[crew_id] = trace_id
             
             logger.info(f"Started trace with ID: {trace_id} for crew_id: {crew_id}")
             logger.info(f"Total traces in storage: {len(traces_storage)}")
@@ -128,23 +171,9 @@ class CrewAITelemetry:
         
         logger.info(f"Ending trace for crew_id: {crew_id}")
         
-        # Find the trace for this crew - try exact match first
-        trace_id = None
-        for tid, trace in traces_storage.items():
-            if trace.get("crew_id") == crew_id:
-                trace_id = tid
-                break
-        
-        # If no exact match, try case-insensitive comparison
-        if not trace_id:
-            normalized_crew_id = crew_id.lower()
-            for tid, trace in traces_storage.items():
-                if trace.get("crew_id") and str(trace.get("crew_id")).strip().lower() == normalized_crew_id:
-                    trace_id = tid
-                    # Update the crew_id to match the one we're using now for consistency
-                    traces_storage[tid]["crew_id"] = crew_id
-                    logger.info(f"Found trace with case-insensitive match, updated crew_id to: {crew_id}")
-                    break
+        # Locate the most relevant trace for this crew (prefer running)
+        trace_id = self._get_trace_id_for_crew(crew_id)
+
         
         if not trace_id:
             logger.error(f"No trace found for crew_id: {crew_id}")
@@ -182,12 +211,9 @@ class CrewAITelemetry:
             agent_name: The name of the agent
             agent_role: The role of the agent
         """
-        # Find the trace for this crew
-        trace_id = None
-        for tid, trace_data in traces_storage.items():
-            if trace_data.get("crew_id") == crew_id:
-                trace_id = tid
-                break
+        # Locate active trace for this crew
+        trace_id = self._get_trace_id_for_crew(crew_id)
+
         
         if not trace_id:
             logger.warning(f"No trace found for crew {crew_id}")
@@ -240,12 +266,9 @@ class CrewAITelemetry:
             agent_id: The ID of the agent
             output: The output of the agent execution
         """
-        # Find the trace for this crew
-        trace_id = None
-        for tid, trace_data in traces_storage.items():
-            if trace_data.get("crew_id") == crew_id:
-                trace_id = tid
-                break
+        # Locate active trace for this crew
+        trace_id = self._get_trace_id_for_crew(crew_id)
+
         
         if not trace_id:
             logger.warning(f"No trace found for crew {crew_id}")
@@ -290,12 +313,9 @@ class CrewAITelemetry:
             task_description: The description of the task
             agent_id: The ID of the agent executing the task
         """
-        # Find the trace for this crew
-        trace_id = None
-        for tid, trace_data in traces_storage.items():
-            if trace_data.get("crew_id") == crew_id:
-                trace_id = tid
-                break
+        # Locate active trace for this crew
+        trace_id = self._get_trace_id_for_crew(crew_id)
+
         
         if not trace_id:
             logger.warning(f"No trace found for crew {crew_id}")
@@ -350,12 +370,9 @@ class CrewAITelemetry:
             task_id: The ID of the task
             output: The output of the task execution
         """
-        # Find the trace for this crew
-        trace_id = None
-        for tid, trace_data in traces_storage.items():
-            if trace_data.get("crew_id") == crew_id:
-                trace_id = tid
-                break
+        # Locate active trace for this crew
+        trace_id = self._get_trace_id_for_crew(crew_id)
+
         
         if not trace_id:
             logger.warning(f"No trace found for crew {crew_id}")
@@ -401,12 +418,9 @@ class CrewAITelemetry:
             inputs: The inputs to the tool
             output: The output of the tool execution
         """
-        # Find the trace for this crew
-        trace_id = None
-        for tid, trace_data in traces_storage.items():
-            if trace_data.get("crew_id") == crew_id:
-                trace_id = tid
-                break
+        # Locate active trace for this crew
+        trace_id = self._get_trace_id_for_crew(crew_id)
+
         
         if not trace_id:
             logger.warning(f"No trace found for crew {crew_id}")
@@ -471,12 +485,9 @@ class CrewAITelemetry:
             event_type: The type of event
             event_data: The event data
         """
-        # Find the trace for this crew
-        trace_id = None
-        for tid, trace_data in traces_storage.items():
-            if trace_data.get("crew_id") == crew_id:
-                trace_id = tid
-                break
+        # Locate active trace for this crew
+        trace_id = self._get_trace_id_for_crew(crew_id)
+
         
         if not trace_id:
             logger.warning(f"No trace found for crew {crew_id}")
