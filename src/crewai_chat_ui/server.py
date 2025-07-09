@@ -385,6 +385,17 @@ async def get_available_tools() -> JSONResponse:
 
         if not tools_list:
             logging.warning("No tools were discovered")
+            
+        # Process each tool to ensure all properties have descriptions
+        for tool in tools_list:
+            if "parameters" in tool and "properties" in tool["parameters"]:
+                for prop_name, prop_schema in tool["parameters"]["properties"].items():
+                    # If there's a title but no description, use the title as description
+                    if "title" in prop_schema and not prop_schema.get("description"):
+                        prop_schema["description"] = prop_schema["title"]
+                    # If there's still no description, add a default one
+                    elif not prop_schema.get("description"):
+                        prop_schema["description"] = f"Parameter: {prop_name}"
 
         return JSONResponse(content={"status": "success", "tools": tools_list})
     except Exception as e:
