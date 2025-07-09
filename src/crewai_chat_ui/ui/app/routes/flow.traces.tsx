@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router";
 import { Button } from "~/components/ui/button";
 import {
   Select,
@@ -75,11 +75,11 @@ export default function FlowTraces() {
   useEffect(() => {
     const flowId = searchParams.get("flowId");
     const traceId = searchParams.get("traceId");
-    
+
     if (flowId) {
       setSelectedFlowId(flowId);
     }
-    
+
     if (traceId) {
       setSelectedTraceId(traceId);
     }
@@ -105,7 +105,7 @@ export default function FlowTraces() {
         const data = await response.json();
         if (data.flows) {
           setFlows(data.flows);
-          
+
           // If no flow is selected but we have flows, select the first one
           if (data.flows.length > 0 && !selectedFlowId) {
             setSelectedFlowId(data.flows[0].id);
@@ -145,7 +145,7 @@ export default function FlowTraces() {
 
         if (data.status === "success" && data.traces) {
           setTraces(data.traces);
-          
+
           // Select the first trace if none is selected
           if (data.traces.length > 0 && !selectedTraceId) {
             setSelectedTraceId(data.traces[0].id);
@@ -173,7 +173,7 @@ export default function FlowTraces() {
   // Process trace data for timeline view
   const timelineSpans = useMemo(() => {
     if (!selectedTrace) return [];
-    
+
     // Function to flatten spans into a single array with level information
     const flattenSpans = (
       spans: TraceSpan[],
@@ -188,7 +188,7 @@ export default function FlowTraces() {
       });
       return result;
     };
-    
+
     return flattenSpans(selectedTrace.spans);
   }, [selectedTrace]);
 
@@ -230,58 +230,93 @@ export default function FlowTraces() {
   };
 
   // Recursive component for hierarchical span view
-  const SpanTree = ({ spans, level = 0 }: { spans: TraceSpan[], level?: number }) => {
+  const SpanTree = ({
+    spans,
+    level = 0,
+  }: {
+    spans: TraceSpan[];
+    level?: number;
+  }) => {
     return (
       <div className="space-y-2">
         {spans.map((span) => (
           <div key={span.id} className="space-y-2">
-            <div 
-              className={`p-3 border rounded-md ${level > 0 ? 'ml-6' : ''}`}
-              style={{ borderLeftWidth: '4px', borderLeftColor: span.status === 'completed' ? '#4caf50' : span.status === 'failed' ? '#f44336' : '#2196f3' }}
+            <div
+              className={`p-3 border rounded-md ${level > 0 ? "ml-6" : ""}`}
+              style={{
+                borderLeftWidth: "4px",
+                borderLeftColor:
+                  span.status === "completed"
+                    ? "#4caf50"
+                    : span.status === "failed"
+                    ? "#f44336"
+                    : "#2196f3",
+              }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <div className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(span.status)}`}></div>
+                  <div
+                    className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(
+                      span.status
+                    )}`}
+                  ></div>
                   <span className="font-medium">{span.name}</span>
                 </div>
-                <Badge variant={span.status === "running" ? "secondary" : 
-                              span.status === "completed" ? "success" : 
-                              span.status === "failed" ? "destructive" : "outline"}>
+                <Badge
+                  variant={
+                    span.status === "running"
+                      ? "secondary"
+                      : span.status === "completed"
+                      ? "default"
+                      : span.status === "failed"
+                      ? "destructive"
+                      : "outline"
+                  }
+                >
                   {span.status}
                 </Badge>
               </div>
-              
+
               <div className="mt-2 text-xs text-muted-foreground">
                 <div>Start: {formatTime(span.start_time)}</div>
                 {span.end_time && <div>End: {formatTime(span.end_time)}</div>}
-                <div>Duration: {formatDuration(span.start_time, span.end_time)}</div>
+                <div>
+                  Duration: {formatDuration(span.start_time, span.end_time)}
+                </div>
               </div>
-              
+
               {span.attributes && Object.keys(span.attributes).length > 0 && (
                 <div className="mt-2">
                   <details className="text-xs">
-                    <summary className="font-medium cursor-pointer">Attributes</summary>
+                    <summary className="font-medium cursor-pointer">
+                      Attributes
+                    </summary>
                     <pre className="mt-1 p-2 bg-muted rounded-md overflow-auto max-h-[200px] whitespace-pre-wrap">
                       {JSON.stringify(span.attributes, null, 2)}
                     </pre>
                   </details>
                 </div>
               )}
-              
+
               {span.events && span.events.length > 0 && (
                 <div className="mt-2">
                   <details className="text-xs">
-                    <summary className="font-medium cursor-pointer">Events ({span.events.length})</summary>
+                    <summary className="font-medium cursor-pointer">
+                      Events ({span.events.length})
+                    </summary>
                     <div className="mt-1 space-y-2">
                       {span.events.map((event, idx) => (
                         <div key={idx} className="p-2 bg-muted rounded-md">
                           <div className="font-medium">{event.name}</div>
-                          <div className="text-muted-foreground">{formatTime(event.timestamp)}</div>
-                          {event.attributes && Object.keys(event.attributes).length > 0 && (
-                            <pre className="mt-1 overflow-auto max-h-[100px] whitespace-pre-wrap">
-                              {JSON.stringify(event.attributes, null, 2)}
-                            </pre>
-                          )}
+                          <div className="text-muted-foreground">
+                            {formatTime(event.timestamp)}
+                          </div>
+                          {event.attributes &&
+                            Object.keys(event.attributes).length > 0 && (
+                              <pre className="mt-1 overflow-auto max-h-[100px] whitespace-pre-wrap">
+                                {JSON.stringify(event.attributes, null, 2)}
+                              </pre>
+                            )}
                         </div>
                       ))}
                     </div>
@@ -289,7 +324,7 @@ export default function FlowTraces() {
                 </div>
               )}
             </div>
-            
+
             {span.children && span.children.length > 0 && (
               <SpanTree spans={span.children} level={level + 1} />
             )}
@@ -321,7 +356,11 @@ export default function FlowTraces() {
             onClick={toggleDarkMode}
             className="h-8 w-8"
           >
-            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {isDarkMode ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </header>
@@ -365,7 +404,8 @@ export default function FlowTraces() {
                   <SelectContent>
                     {traces.map((trace) => (
                       <SelectItem key={trace.id} value={trace.id}>
-                        {new Date(trace.start_time).toLocaleString()} - {trace.status}
+                        {new Date(trace.start_time).toLocaleString()} -{" "}
+                        {trace.status}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -386,25 +426,42 @@ export default function FlowTraces() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Status:</span>
-                      <Badge variant={selectedTrace.status === "running" ? "secondary" : 
-                                     selectedTrace.status === "completed" ? "success" : 
-                                     selectedTrace.status === "failed" ? "destructive" : "outline"}>
+                      <Badge
+                        variant={
+                          selectedTrace.status === "running"
+                            ? "secondary"
+                            : selectedTrace.status === "completed"
+                            ? "default"
+                            : selectedTrace.status === "failed"
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
                         {selectedTrace.status}
                       </Badge>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Started:</span>
-                      <span>{new Date(selectedTrace.start_time).toLocaleString()}</span>
+                      <span>
+                        {new Date(selectedTrace.start_time).toLocaleString()}
+                      </span>
                     </div>
                     {selectedTrace.end_time && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Ended:</span>
-                        <span>{new Date(selectedTrace.end_time).toLocaleString()}</span>
+                        <span>
+                          {new Date(selectedTrace.end_time).toLocaleString()}
+                        </span>
                       </div>
                     )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Duration:</span>
-                      <span>{formatDuration(selectedTrace.start_time, selectedTrace.end_time)}</span>
+                      <span>
+                        {formatDuration(
+                          selectedTrace.start_time,
+                          selectedTrace.end_time
+                        )}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Spans:</span>
@@ -437,7 +494,8 @@ export default function FlowTraces() {
               <div className="text-center max-w-md">
                 <h2 className="text-2xl font-bold mb-2">Flow Traces</h2>
                 <p className="text-muted-foreground mb-4">
-                  Select a flow and a trace from the sidebar to view execution details.
+                  Select a flow and a trace from the sidebar to view execution
+                  details.
                 </p>
               </div>
             </div>
@@ -459,38 +517,63 @@ export default function FlowTraces() {
                           className="p-3 border rounded-md"
                           style={{
                             marginLeft: `${span.level * 24}px`,
-                            borderLeftWidth: '4px',
-                            borderLeftColor: span.status === 'completed' ? '#4caf50' : span.status === 'failed' ? '#f44336' : '#2196f3'
+                            borderLeftWidth: "4px",
+                            borderLeftColor:
+                              span.status === "completed"
+                                ? "#4caf50"
+                                : span.status === "failed"
+                                ? "#f44336"
+                                : "#2196f3",
                           }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center">
-                              <div className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(span.status)}`}></div>
+                              <div
+                                className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(
+                                  span.status
+                                )}`}
+                              ></div>
                               <span className="font-medium">{span.name}</span>
                             </div>
-                            <Badge variant={span.status === "running" ? "secondary" : 
-                                          span.status === "completed" ? "success" : 
-                                          span.status === "failed" ? "destructive" : "outline"}>
+                            <Badge
+                              variant={
+                                span.status === "running"
+                                  ? "secondary"
+                                  : span.status === "completed"
+                                  ? "default"
+                                  : span.status === "failed"
+                                  ? "destructive"
+                                  : "outline"
+                              }
+                            >
                               {span.status}
                             </Badge>
                           </div>
-                          
+
                           <div className="mt-2 text-xs text-muted-foreground">
                             <div>Start: {formatTime(span.start_time)}</div>
-                            {span.end_time && <div>End: {formatTime(span.end_time)}</div>}
-                            <div>Duration: {formatDuration(span.start_time, span.end_time)}</div>
-                          </div>
-                          
-                          {span.attributes && Object.keys(span.attributes).length > 0 && (
-                            <div className="mt-2">
-                              <details className="text-xs">
-                                <summary className="font-medium cursor-pointer">Attributes</summary>
-                                <pre className="mt-1 p-2 bg-muted rounded-md overflow-auto max-h-[200px] whitespace-pre-wrap">
-                                  {JSON.stringify(span.attributes, null, 2)}
-                                </pre>
-                              </details>
+                            {span.end_time && (
+                              <div>End: {formatTime(span.end_time)}</div>
+                            )}
+                            <div>
+                              Duration:{" "}
+                              {formatDuration(span.start_time, span.end_time)}
                             </div>
-                          )}
+                          </div>
+
+                          {span.attributes &&
+                            Object.keys(span.attributes).length > 0 && (
+                              <div className="mt-2">
+                                <details className="text-xs">
+                                  <summary className="font-medium cursor-pointer">
+                                    Attributes
+                                  </summary>
+                                  <pre className="mt-1 p-2 bg-muted rounded-md overflow-auto max-h-[200px] whitespace-pre-wrap">
+                                    {JSON.stringify(span.attributes, null, 2)}
+                                  </pre>
+                                </details>
+                              </div>
+                            )}
                         </div>
                       ))}
                     </div>

@@ -369,6 +369,79 @@ async def get_flow_traces(flow_id: str):
     return {"status": "success", "traces": flow_traces[flow_id]}
 
 
+@router.get("/{flow_id}/structure")
+async def get_flow_structure(flow_id: str):
+    """
+    Get the structure of a flow for visualization
+    
+    Args:
+        flow_id: ID of the flow
+        
+    Returns:
+        Dict with flow structure information
+    """
+    if flow_id not in flows_cache:
+        raise HTTPException(status_code=404, detail="Flow not found")
+    
+    flow_info = flows_cache[flow_id]
+    
+    try:
+        # Load the flow class without instantiating it
+        flow_class = flow_info.flow_class
+        
+        # Extract methods from the flow class
+        methods = []
+        dependencies = {}
+        
+        # Get all methods that are steps
+        step_methods = []
+        if hasattr(flow_class, "steps") and isinstance(flow_class.steps, list):
+            step_methods = [step.__name__ if hasattr(step, "__name__") else str(step) 
+                          for step in flow_class.steps]
+        
+        # Extract methods and their dependencies
+        for name in dir(flow_class):
+            # Skip private methods and properties
+            if name.startswith("_") or name in ["steps", "run", "run_async"]:
+                continue
+                
+            attr = getattr(flow_class, name)
+            if callable(attr):
+                # Check if this is a step method
+                is_step = name in step_methods
+                
+                # Get method dependencies if available
+                method_deps = []
+                if hasattr(attr, "dependencies"):
+                    method_deps = attr.dependencies
+                
+                methods.append({
+                    "id": name,
+                    "name": name.replace("_", " ").title(),
+                    "description": attr.__doc__.strip() if attr.__doc__ else "",
+                    "is_step": is_step,
+                    "dependencies": method_deps
+                })
+                
+                dependencies[name] = method_deps
+        
+        # Return the flow structure
+        return {
+            "status": "success",
+            "flow": {
+                "id": flow_info.id,
+                "name": flow_info.name,
+                "description": flow_info.description,
+                "methods": methods
+            }
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting flow structure: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting flow structure: {str(e)}")
+
+
+
 # WebSocket management functions
 def register_websocket_queue(flow_id: str, connection_id: str, queue: asyncio.Queue):
     """

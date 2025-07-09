@@ -48,6 +48,7 @@ export default function Flow() {
   const [flowDetails, setFlowDetails] = useState<FlowDetails | null>(null);
   const [inputFields, setInputFields] = useState<InputField[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'init' | 'execution'>('execution');
   const [result, setResult] = useState<string | null>(null);
   const [isRunningFlow, setIsRunningFlow] = useState(false);
   const [resetKey, setResetKey] = useState(0); // Key to trigger reset in FlowCanvas
@@ -105,30 +106,48 @@ export default function Flow() {
 
       try {
         setLoading(true);
+        
+        // First check if the flow exists in our list
+        const flow = flows.find((f) => f.id === selectedFlowId);
+        if (!flow) {
+          setError(`Flow with ID ${selectedFlowId} not found. Please select a valid flow.`);
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch flow initialization details
         const response = await fetch(`/api/flows/${selectedFlowId}/initialize`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError(`Flow with ID ${selectedFlowId} not found. Please select a valid flow.`);
+          } else {
+            setError(`Error fetching flow details: ${response.statusText}`);
+          }
+          setLoading(false);
+          return;
+        }
+        
         const data = await response.json();
 
         if (data.status === "success") {
-          const flow = flows.find((f) => f.id === selectedFlowId);
-          if (flow) {
-            setFlowDetails({
-              id: flow.id,
-              name: flow.name,
-              description: flow.description,
-              required_inputs: data.required_inputs || [],
-            });
+          setFlowDetails({
+            id: flow.id,
+            name: flow.name,
+            description: flow.description,
+            required_inputs: data.required_inputs || [],
+          });
 
-            // Initialize input fields with empty values
-            setInputFields(
-              (data.required_inputs || []).map(
-                (input: { name: string; description: string }) => ({
-                  name: input.name,
-                  description: input.description,
-                  value: "",
-                })
-              )
-            );
-          }
+          // Initialize input fields with empty values
+          setInputFields(
+            (data.required_inputs || []).map(
+              (input: { name: string; description: string }) => ({
+                name: input.name,
+                description: input.description,
+                value: "",
+              })
+            )
+          );
         } else {
           setError(data.detail || "Failed to fetch flow details");
         }
@@ -200,6 +219,32 @@ export default function Flow() {
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
       <header className="py-4 px-6 border-b bg-background">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Flow</h2>
+          <div className="flex space-x-2">
+            <Button
+              variant={viewMode === 'execution' ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode('execution')}
+            >
+              Run Flow
+            </Button>
+            <Button
+              variant={viewMode === 'init' ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode('init')}
+            >
+              Visualize Structure
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/flow/traces")}
+            >
+              View Traces
+            </Button>
+          </div>
+        </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <Button
@@ -257,47 +302,42 @@ export default function Flow() {
                 <h3 className="text-lg font-semibold mb-2">
                   {flowDetails.name}
                 </h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground mb-4">
                   {flowDetails.description}
                 </p>
               </div>
             )}
 
-            {inputFields.length > 0 && (
+            {viewMode === 'execution' && (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <h3 className="text-lg font-semibold">Required Inputs</h3>
 
                 {inputFields.map((field) => (
                   <div key={field.name} className="space-y-2">
-                    <Label htmlFor={field.name} className="text-sm font-medium">
-                      {field.name}
-                      {field.description && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400 block mt-1">
-                          {field.description}
-                        </span>
-                      )}
-                    </Label>
-                    {field.description.toLowerCase().includes("longer") ? (
+                    <Label htmlFor={field.name}>{field.name}</Label>
+                    {field.name.toLowerCase().includes("prompt") ? (
                       <Textarea
                         id={field.name}
+                        placeholder={field.description}
                         value={field.value}
-                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                        onChange={(e) =>
                           handleInputChange(field.name, e.target.value)
                         }
-                        disabled={loading}
-                        className="min-h-24 text-sm"
+                        className="min-h-[100px]"
                       />
                     ) : (
                       <Input
                         id={field.name}
+                        placeholder={field.description}
                         value={field.value}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        onChange={(e) =>
                           handleInputChange(field.name, e.target.value)
                         }
-                        disabled={loading}
-                        className="text-sm"
                       />
                     )}
+                    <p className="text-xs text-muted-foreground">
+                      {field.description}
+                    </p>
                   </div>
                 ))}
 
@@ -337,6 +377,7 @@ export default function Flow() {
               flowId={selectedFlowId}
               isRunning={isRunningFlow}
               resetKey={resetKey}
+              viewMode={viewMode}
             />
           )}
 

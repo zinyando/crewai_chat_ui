@@ -7,4 +7,5 @@ export default [
   { path: "kickoff/traces", file: "routes/kickoff.traces.tsx" },
   { path: "tools", file: "routes/tools.tsx" },
   { path: "flow", file: "routes/flow.tsx" },
+  { path: "flow/traces", file: "routes/flow.traces.tsx" },
 ] satisfies RouteConfig;
