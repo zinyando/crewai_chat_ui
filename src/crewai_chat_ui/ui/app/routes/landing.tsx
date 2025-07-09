@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "~/components/ui/button";
 import { useChatStore } from "~/lib/store";
-import { MessageSquare, Zap, Moon, Sun, Wrench } from "lucide-react";
+import { MessageSquare, Zap, Moon, Sun, Wrench, Share2 } from "lucide-react";
 
 export function meta() {
   return [
@@ -48,6 +48,10 @@ export default function Landing() {
     navigate("/tools");
   };
 
+  const handleFlowMode = () => {
+    navigate("/flow");
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
@@ -80,7 +84,7 @@ export default function Landing() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 w-full max-w-6xl">
           {/* Chat Mode Card */}
           <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card flex flex-col h-full">
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 mx-auto">
@@ -131,6 +135,23 @@ export default function Landing() {
             <div className="flex justify-center mt-6 pt-2">
               <Button onClick={handleToolsMode} className="w-full" size="lg">
                 Test Tools
+              </Button>
+            </div>
+          </div>
+
+          {/* Flow Mode Card */}
+          <div className="rounded-xl p-8 shadow-lg transition-all hover:shadow-xl bg-card flex flex-col h-full">
+            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 mx-auto">
+              <Share2 className="h-8 w-8 text-primary" />
+            </div>
+            <h3 className="text-2xl font-bold mb-4 text-center">Flow Mode</h3>
+            <p className="text-center flex-grow">
+              Visualize and execute CrewAI flows with real-time updates. See steps
+              and outputs as they happen in an interactive flow diagram.
+            </p>
+            <div className="flex justify-center mt-6 pt-2">
+              <Button onClick={handleFlowMode} className="w-full" size="lg">
+                Run Flows
               </Button>
             </div>
           </div>
