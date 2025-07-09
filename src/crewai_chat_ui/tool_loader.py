@@ -110,11 +110,16 @@ def discover_available_tools(directory: Optional[Path] = None) -> List[Dict[str,
                         and issubclass(attr, BaseTool)
                         and attr is not BaseTool
                     ):
-
                         tool_info = _extract_class_tool_info(attr, attr_name, module_name)
 
+                    # Instance-based tools returned by @tool decorator
+                    elif BaseTool is not None and isinstance(attr, BaseTool):
+                        tool_info = _extract_instance_tool_info(attr, attr_name, module_name)
+
                     # Function-based tools (decorated with @tool)
-                    elif inspect.isfunction(attr) and hasattr(attr, "_crewai_tool"):
+                    elif inspect.isfunction(attr) and (hasattr(attr, "_crewai_tool") or 
+                                                      hasattr(attr, "name") or 
+                                                      getattr(attr, "__crewai_tool__", False)):
 
                         tool_info = _extract_function_tool_info(
                             attr, attr_name, module_name
@@ -181,8 +186,20 @@ def _extract_function_tool_info(
 ) -> Dict[str, Any]:
     """Extract tool information from a function decorated with @tool."""
 
-    tool_name = getattr(tool_func, "name", attr_name)
-    tool_description = (tool_func.__doc__ or "No description available").strip()
+    # For CrewAI tool decorator, the name can be stored in different attributes
+    # Try multiple ways to get the tool name
+    tool_name = attr_name
+    if hasattr(tool_func, "name"):
+        tool_name = tool_func.name
+    elif hasattr(tool_func, "_crewai_tool") and hasattr(tool_func._crewai_tool, "name"):
+        tool_name = tool_func._crewai_tool.name
+    
+    # Get tool description from docstring or _crewai_tool attribute
+    tool_description = "No description available"
+    if tool_func.__doc__:
+        tool_description = tool_func.__doc__.strip()
+    elif hasattr(tool_func, "_crewai_tool") and hasattr(tool_func._crewai_tool, "description"):
+        tool_description = tool_func._crewai_tool.description
 
     # Extract parameters from function signature
     parameters = _extract_method_parameters(tool_func)
@@ -195,6 +212,24 @@ def _extract_function_tool_info(
         "class_name": attr_name,
         "is_class": False,
     }
+
+
+def _ensure_property_descriptions(parameters: Dict[str, Any]):
+    """Ensure each property in the JSON schema has a non-empty description."""
+    if not parameters or not isinstance(parameters, dict):
+        return
+        
+    for prop_name, prop_schema in parameters.get("properties", {}).items():
+        # Always copy title to description if title exists
+        if prop_schema.get("title"):
+            prop_schema["description"] = prop_schema["title"]
+        # If no description exists, add a default one
+        elif not prop_schema.get("description"):
+            prop_schema["description"] = f"Parameter: {prop_name}"
+        
+        # Handle nested properties (for objects)
+        if prop_schema.get("type") == "object" and "properties" in prop_schema:
+            _ensure_property_descriptions(prop_schema)
 
 
 def _extract_schema_parameters(schema_class) -> Dict[str, Any]:
@@ -308,7 +343,31 @@ def _extract_schema_parameters(schema_class) -> Dict[str, Any]:
     except Exception as e:
         logging.error(f"Error extracting schema from {schema_class.__name__}: {e}")
 
+    _ensure_property_descriptions(parameters)
     return parameters
+
+
+def _extract_instance_tool_info(tool_instance, attr_name: str, module_name: str) -> Dict[str, Any]:
+    """Extract information from a BaseTool *instance* (returned by @tool decorator)."""
+    # Try to get name and description attributes present in BaseTool
+    tool_name = getattr(tool_instance, "name", attr_name)
+    tool_description = getattr(tool_instance, "description", "No description available").strip()
+
+    # Parameters: If the instance has args_schema use same logic
+    parameters: Dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+    if hasattr(tool_instance, "args_schema") and tool_instance.args_schema is not None:
+        parameters = _extract_schema_parameters(tool_instance.args_schema)
+    elif hasattr(tool_instance, "_run"):
+        parameters = _extract_method_parameters(tool_instance._run)
+
+    return {
+        "name": tool_name,
+        "description": tool_description,
+        "parameters": parameters,
+        "module": module_name,
+        "class_name": attr_name,
+        "is_class": False,
+    }
 
 
 def _extract_method_parameters(method) -> Dict[str, Any]:
@@ -360,4 +419,5 @@ def _extract_method_parameters(method) -> Dict[str, Any]:
     except Exception as e:
         logging.error(f"Error extracting method parameters: {e}")
 
+    _ensure_property_descriptions(parameters)
     return parameters
