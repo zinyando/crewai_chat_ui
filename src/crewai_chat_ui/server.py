@@ -56,7 +56,7 @@ from crewai_chat_ui.chat_handler import ChatHandler
 from crewai_chat_ui.event_listener import crew_visualization_listener
 from crewai_chat_ui.tool_loader import discover_available_tools as discover_tools
 from crewai_chat_ui.telemetry import telemetry_service
-from crewai_chat_ui.tools.flow_api import router as flow_router
+from crewai_chat_ui.flow_api import router as flow_router
 
 # Create FastAPI app
 app = FastAPI()
@@ -73,11 +73,13 @@ app.add_middleware(
 # Include the flow API router
 app.include_router(flow_router)
 
+
 # Telemetry API endpoints
 @app.get("/api/traces")
 async def get_traces(limit: int = 10):
     """Get the most recent traces."""
     return telemetry_service.get_traces(limit=limit)
+
 
 @app.get("/api/traces/{trace_id}")
 async def get_trace(trace_id: str):
@@ -87,20 +89,22 @@ async def get_trace(trace_id: str):
         raise HTTPException(status_code=404, detail="Trace not found")
     return trace
 
+
 @app.get("/api/crews/{crew_id}/traces")
 async def get_crew_traces(crew_id: str):
     """Get all traces for a specific crew."""
     logging.info(f"API: Fetching traces for crew_id: {crew_id}")
-    
+
     # Debug: Check what traces are available
     all_traces = telemetry_service.get_traces(limit=100)
     logging.info(f"API: Total traces available: {len(all_traces)}")
-    
+
     # Get traces for this specific crew
     crew_traces = telemetry_service.get_traces_for_crew(crew_id)
     logging.info(f"API: Found {len(crew_traces)} traces for crew_id: {crew_id}")
-    
+
     return crew_traces
+
 
 # Get the directory containing the built React app
 ui_dir = Path(__file__).parent / "ui" / "build" / "client"
@@ -390,7 +394,7 @@ async def get_available_tools() -> JSONResponse:
 
         if not tools_list:
             logging.warning("No tools were discovered")
-            
+
         # Process each tool to ensure all properties have descriptions
         for tool in tools_list:
             if "parameters" in tool and "properties" in tool["parameters"]:
@@ -506,10 +510,11 @@ async def execute_tool(tool_name: str, request: ToolExecuteRequest) -> JSONRespo
                 else:
                     # It's a regular function, call directly
                     result = tool_attr(**inputs)
-                    
+
                 # Handle async functions
                 if inspect.iscoroutine(result):
                     import asyncio
+
                     result = asyncio.run(result)
             except Exception as e:
                 logging.error(f"Error executing function-based tool: {str(e)}")
@@ -573,15 +578,19 @@ async def kickoff_crew(crew_id: str, request: KickoffRequest) -> JSONResponse:
         else:
             # If the crew doesn't have a get_event_bus method, use the global event bus
             from crewai.utilities.events import crewai_event_bus
+
             crew_visualization_listener.setup_listeners(crewai_event_bus)
-            logging.info(f"Using global event bus for crew: {crew_id} since it doesn't have get_event_bus method")
-            
+            logging.info(
+                f"Using global event bus for crew: {crew_id} since it doesn't have get_event_bus method"
+            )
+
             # Set the crew ID explicitly to ensure consistent tracking
             if hasattr(crew_instance, "id"):
                 logging.info(f"Crew ID from instance: {crew_instance.id}")
             else:
                 # Set an ID on the crew instance if it doesn't have one
                 import uuid
+
                 crew_instance.id = crew_id
                 logging.info(f"Set crew ID to: {crew_id} on crew instance")
 
@@ -667,34 +676,35 @@ async def flow_websocket_endpoint(websocket: WebSocket, flow_id: str):
     """WebSocket endpoint for real-time flow execution visualization."""
     logging.info(f"New WebSocket connection request for flow {flow_id}")
     await websocket.accept()
-    
+
     try:
         # Get the flow execution from the flow API router's cache
         flow_execution = flow_router.get_active_execution(flow_id)
         if not flow_execution:
-            await websocket.send_json({
-                "type": "error", 
-                "message": f"No active execution found for flow {flow_id}"
-            })
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "message": f"No active execution found for flow {flow_id}",
+                }
+            )
             await websocket.close()
             return
-        
+
         # Create a queue for this connection
         queue = asyncio.Queue()
-        
+
         # Register this connection
         connection_id = str(uuid.uuid4())
         flow_router.register_websocket_queue(flow_id, connection_id, queue)
-        
+
         try:
             # Send initial state
             initial_state = flow_router.get_flow_state(flow_id)
             if initial_state:
-                await websocket.send_json({
-                    "type": "flow_state", 
-                    "payload": initial_state
-                })
-            
+                await websocket.send_json(
+                    {"type": "flow_state", "payload": initial_state}
+                )
+
             # Listen for updates from the flow execution
             while True:
                 try:
@@ -707,10 +717,9 @@ async def flow_websocket_endpoint(websocket: WebSocket, flow_id: str):
                         # Send final state before closing
                         final_state = flow_router.get_flow_state(flow_id)
                         if final_state:
-                            await websocket.send_json({
-                                "type": "flow_state", 
-                                "payload": final_state
-                            })
+                            await websocket.send_json(
+                                {"type": "flow_state", "payload": final_state}
+                            )
                         break
                     # Otherwise continue waiting
                     continue
