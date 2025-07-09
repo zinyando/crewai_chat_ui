@@ -152,7 +152,44 @@ def extract_flows_from_file(file_path: str) -> List[FlowInfo]:
 
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
-            spec.loader.exec_module(module)
+            
+            # Set up proper package structure for relative imports
+            # Determine the package name from the file path
+            package_parts = file_path.split(os.sep)
+            try:
+                # Find 'src' in the path to determine the package structure
+                if 'src' in package_parts:
+                    src_index = package_parts.index('src')
+                    if src_index + 1 < len(package_parts):
+                        # Set the package name to the module's parent package
+                        parent_package = '.'.join(package_parts[src_index+1:-1])
+                        module.__package__ = parent_package
+                        
+                # If no 'src' directory, try to infer from directory structure
+                else:
+                    # Use the parent directory as the package name
+                    parent_package = os.path.basename(os.path.dirname(file_path))
+                    module.__package__ = parent_package
+            except (ValueError, IndexError):
+                # If we can't determine the package, use a fallback
+                pass
+                
+            try:
+                spec.loader.exec_module(module)
+            except ImportError as e:
+                # Log import errors but continue with other files
+                logger.debug(f"Import error executing module {file_path}: {str(e)}")
+                # Clean up module from sys.modules
+                if module_name in sys.modules:
+                    del sys.modules[module_name]
+                return []
+            except Exception as e:
+                # Log other errors
+                logger.debug(f"Error executing module {file_path}: {str(e)}")
+                # Clean up module from sys.modules
+                if module_name in sys.modules:
+                    del sys.modules[module_name]
+                return []
 
             # Inspect all classes in the module
             for name, obj in inspect.getmembers(module):
