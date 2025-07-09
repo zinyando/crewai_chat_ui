@@ -23,6 +23,13 @@ export interface Crew {
   path?: string
 }
 
+export interface Flow {
+  id: string
+  name: string
+  description: string
+  path?: string
+}
+
 export interface InputField {
   name: string
   description: string
@@ -31,11 +38,13 @@ export interface InputField {
 
 interface ChatState {
   crews: Crew[]
+  flows: Flow[]
   currentCrewId: string | null
   currentChatId: string | null
   chatHistory: Record<string, ChatThread>
   isDarkMode: boolean
   setCrews: (crews: Crew[]) => void
+  setFlows: (flows: Flow[]) => void
   setCurrentCrew: (crewId: string | null) => void
   setCurrentChat: (chatId: string | null) => void
   addMessage: (chatId: string, message: ChatMessage) => void
@@ -48,18 +57,15 @@ interface ChatState {
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
+      flows: [],
       crews: [],
       currentCrewId: null,
       currentChatId: null,
       chatHistory: {},
       isDarkMode: false,
 
-      setCrews: (crews) => set((state) => ({ 
-        crews,
-        currentCrewId: crews.some(c => c.id === state.currentCrewId) 
-          ? state.currentCrewId 
-          : crews.length > 0 ? crews[0].id : null
-      })),
+      setCrews: (crews) => set({ crews }),
+      setFlows: (flows) => set({ flows }),
       
       setCurrentCrew: (crewId) => set((state) => {
         if (crewId === null || state.crews.some(c => c.id === crewId)) {

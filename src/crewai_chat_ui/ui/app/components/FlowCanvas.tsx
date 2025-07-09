@@ -15,12 +15,9 @@ import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 
-// Define node types for the flow visualization
-const nodeTypes: NodeTypes = {
-  flowNode: FlowNode,
-  stepNode: StepNode,
-  outputNode: OutputNode,
-};
+// Initial empty arrays with proper types
+const initialNodes: Node[] = [];
+const initialEdges: Edge[] = [];
 
 interface FlowCanvasProps {
   flowId: string;
@@ -48,9 +45,6 @@ interface FlowStep {
   parent_id?: string;
   dependencies?: string[];
 }
-
-const initialNodes: Node[] = [];
-const initialEdges: Edge[] = [];
 
 // Custom node components
 const FlowNode = ({ data }: { data: any }) => {
@@ -84,7 +78,7 @@ const FlowNode = ({ data }: { data: any }) => {
               data.status === "running"
                 ? "secondary"
                 : data.status === "completed"
-                ? "success"
+                ? "outline" // Changed from "success" to "outline" to fix type error
                 : data.status === "failed"
                 ? "destructive"
                 : "outline"
@@ -134,7 +128,7 @@ const StepNode = ({ data }: { data: any }) => {
               data.status === "running"
                 ? "secondary"
                 : data.status === "completed"
-                ? "success"
+                ? "outline" // Changed from "success" to "outline" to fix type error
                 : data.status === "failed"
                 ? "destructive"
                 : "outline"
@@ -427,7 +421,7 @@ const FlowCanvas = ({ flowId, isRunning, resetKey }: FlowCanvasProps) => {
                     state.status === "running"
                       ? "secondary"
                       : state.status === "completed"
-                      ? "success"
+                      ? "outline" // Changed from "success" to "outline" to fix type error
                       : state.status === "failed"
                       ? "destructive"
                       : "outline"
@@ -444,6 +438,13 @@ const FlowCanvas = ({ flowId, isRunning, resetKey }: FlowCanvasProps) => {
       </ReactFlow>
     </div>
   );
+};
+
+// Define node types after the component definitions
+const nodeTypes: NodeTypes = {
+  flowNode: FlowNode,
+  stepNode: StepNode,
+  outputNode: OutputNode,
 };
 
 export default FlowCanvas;
