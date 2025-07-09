@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 # Create router
 router = APIRouter(prefix="/api/flows", tags=["flows"])
 
+
+
 # In-memory storage for flows and traces
 flows_cache: Dict[str, FlowInfo] = {}
 flow_traces: Dict[str, List[Dict[str, Any]]] = {}
@@ -63,8 +65,14 @@ def refresh_flows():
     
     logger.info(f"Loaded {len(flows_cache)} flows")
 
+# Load flows immediately on module import to ensure cache is populated even if
+# the router-level startup event is not executed (which can happen when
+# FastAPI mounts routers without triggering individual router events).
+refresh_flows()
+
 
 @router.get("/")
+@router.get("")
 async def get_flows() -> Dict[str, Any]:
     """
     Get all available flows
