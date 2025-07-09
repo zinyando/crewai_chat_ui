@@ -48,7 +48,7 @@ export default function Flow() {
   const [flowDetails, setFlowDetails] = useState<FlowDetails | null>(null);
   const [inputFields, setInputFields] = useState<InputField[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'init' | 'execution'>('execution');
+  const [viewMode, setViewMode] = useState<"init" | "execution">("execution");
   const [result, setResult] = useState<string | null>(null);
   const [isRunningFlow, setIsRunningFlow] = useState(false);
   const [resetKey, setResetKey] = useState(0); // Key to trigger reset in FlowCanvas
@@ -71,13 +71,25 @@ export default function Flow() {
         if (data.flows) {
           setFlows(data.flows);
 
-          // Automatically select the first flow if none is selected
-          if (data.flows.length > 0 && !selectedFlowId) {
-            setSelectedFlowId(data.flows[0].id);
+          // Always select the first flow from the latest API response
+          // This ensures we're using the most up-to-date flow ID
+          if (data.flows.length > 0) {
+            // Check if the currently selected flow ID still exists in the response
+            const flowStillExists = data.flows.some(
+              (flow: { id: string }) => flow.id === selectedFlowId
+            );
+
+            if (!flowStillExists || !selectedFlowId) {
+              console.log(`Selecting flow ID: ${data.flows[0].id}`);
+              setSelectedFlowId(data.flows[0].id);
+            }
+          } else {
+            setError("No flows available. Please check your configuration.");
           }
         }
       } catch (error) {
         console.error("Error fetching flows:", error);
+        setError("Failed to fetch flows. Please try again later.");
       } finally {
         setLoading(false);
       }
@@ -89,6 +101,7 @@ export default function Flow() {
     } else {
       // If flows are already loaded but no flow is selected, select the first one
       if (flows.length > 0 && !selectedFlowId) {
+        console.log(`Selecting flow ID: ${flows[0].id}`);
         setSelectedFlowId(flows[0].id);
       }
       setLoading(false);
@@ -106,28 +119,32 @@ export default function Flow() {
 
       try {
         setLoading(true);
-        
+
         // First check if the flow exists in our list
         const flow = flows.find((f) => f.id === selectedFlowId);
         if (!flow) {
-          setError(`Flow with ID ${selectedFlowId} not found. Please select a valid flow.`);
+          setError(
+            `Flow with ID ${selectedFlowId} not found. Please select a valid flow.`
+          );
           setLoading(false);
           return;
         }
-        
+
         // Fetch flow initialization details
         const response = await fetch(`/api/flows/${selectedFlowId}/initialize`);
-        
+
         if (!response.ok) {
           if (response.status === 404) {
-            setError(`Flow with ID ${selectedFlowId} not found. Please select a valid flow.`);
+            setError(
+              `Flow with ID ${selectedFlowId} not found. Please select a valid flow.`
+            );
           } else {
             setError(`Error fetching flow details: ${response.statusText}`);
           }
           setLoading(false);
           return;
         }
-        
+
         const data = await response.json();
 
         if (data.status === "success") {
@@ -219,32 +236,6 @@ export default function Flow() {
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
       <header className="py-4 px-6 border-b bg-background">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold">Flow</h2>
-          <div className="flex space-x-2">
-            <Button
-              variant={viewMode === 'execution' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode('execution')}
-            >
-              Run Flow
-            </Button>
-            <Button
-              variant={viewMode === 'init' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode('init')}
-            >
-              Visualize Structure
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate("/flow/traces")}
-            >
-              View Traces
-            </Button>
-          </div>
-        </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <Button
@@ -308,7 +299,7 @@ export default function Flow() {
               </div>
             )}
 
-            {viewMode === 'execution' && (
+            {viewMode === "execution" && (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <h3 className="text-lg font-semibold">Required Inputs</h3>
 

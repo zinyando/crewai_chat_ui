@@ -56,7 +56,7 @@ from crewai_chat_ui.chat_handler import ChatHandler
 from crewai_chat_ui.event_listener import crew_visualization_listener
 from crewai_chat_ui.tool_loader import discover_available_tools as discover_tools
 from crewai_chat_ui.telemetry import telemetry_service
-from crewai_chat_ui.flow_api import router as flow_router
+from crewai_chat_ui.flow_api import router as flow_router, get_active_execution
 
 # Create FastAPI app
 app = FastAPI()
@@ -678,8 +678,8 @@ async def flow_websocket_endpoint(websocket: WebSocket, flow_id: str):
     await websocket.accept()
 
     try:
-        # Get the flow execution from the flow API router's cache
-        flow_execution = flow_router.get_active_execution(flow_id)
+        # Get the flow execution from the flow API's active flows cache
+        flow_execution = get_active_execution(flow_id)
         if not flow_execution:
             await websocket.send_json(
                 {
@@ -691,7 +691,7 @@ async def flow_websocket_endpoint(websocket: WebSocket, flow_id: str):
             return
 
         # Create a queue for this connection
-        queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue()
 
         # Register this connection
         connection_id = str(uuid.uuid4())
