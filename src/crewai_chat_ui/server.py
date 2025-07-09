@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import datetime
+import uuid
 from pathlib import Path
 import threading
 from typing import Dict, Optional, List, Any
@@ -55,6 +56,7 @@ from crewai_chat_ui.chat_handler import ChatHandler
 from crewai_chat_ui.event_listener import crew_visualization_listener
 from crewai_chat_ui.tool_loader import discover_available_tools as discover_tools
 from crewai_chat_ui.telemetry import telemetry_service
+from crewai_chat_ui.tools.flow_api import router as flow_router
 
 # Create FastAPI app
 app = FastAPI()
@@ -67,6 +69,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include the flow API router
+app.include_router(flow_router)
 
 # Telemetry API endpoints
 @app.get("/api/traces")
@@ -655,6 +660,71 @@ async def websocket_endpoint(websocket: WebSocket):
             crew_visualization_listener.disconnect(websocket)
         except:
             pass
+
+
+@app.websocket("/ws/flow/{flow_id}")
+async def flow_websocket_endpoint(websocket: WebSocket, flow_id: str):
+    """WebSocket endpoint for real-time flow execution visualization."""
+    logging.info(f"New WebSocket connection request for flow {flow_id}")
+    await websocket.accept()
+    
+    try:
+        # Get the flow execution from the flow API router's cache
+        flow_execution = flow_router.get_active_execution(flow_id)
+        if not flow_execution:
+            await websocket.send_json({
+                "type": "error", 
+                "message": f"No active execution found for flow {flow_id}"
+            })
+            await websocket.close()
+            return
+        
+        # Create a queue for this connection
+        queue = asyncio.Queue()
+        
+        # Register this connection
+        connection_id = str(uuid.uuid4())
+        flow_router.register_websocket_queue(flow_id, connection_id, queue)
+        
+        try:
+            # Send initial state
+            initial_state = flow_router.get_flow_state(flow_id)
+            if initial_state:
+                await websocket.send_json({
+                    "type": "flow_state", 
+                    "payload": initial_state
+                })
+            
+            # Listen for updates from the flow execution
+            while True:
+                try:
+                    # Wait for messages with a timeout
+                    message = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    await websocket.send_json(message)
+                except asyncio.TimeoutError:
+                    # Check if the flow execution is still active
+                    if not flow_router.is_execution_active(flow_id):
+                        # Send final state before closing
+                        final_state = flow_router.get_flow_state(flow_id)
+                        if final_state:
+                            await websocket.send_json({
+                                "type": "flow_state", 
+                                "payload": final_state
+                            })
+                        break
+                    # Otherwise continue waiting
+                    continue
+        except WebSocketDisconnect:
+            logging.info(f"WebSocket client disconnected: {connection_id}")
+        except Exception as e:
+            logging.error(f"Error in flow WebSocket: {str(e)}")
+        finally:
+            # Unregister this connection
+            flow_router.unregister_websocket_queue(flow_id, connection_id)
+    except Exception as e:
+        logging.error(f"Flow WebSocket error: {str(e)}", exc_info=True)
+    finally:
+        await websocket.close()
 
 
 @app.get("/{full_path:path}")
