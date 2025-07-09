@@ -69,7 +69,7 @@ export default function Flow() {
         const data = await response.json();
         if (data.flows) {
           setFlows(data.flows);
-          
+
           // Automatically select the first flow if none is selected
           if (data.flows.length > 0 && !selectedFlowId) {
             setSelectedFlowId(data.flows[0].id);
@@ -105,9 +105,7 @@ export default function Flow() {
 
       try {
         setLoading(true);
-        const response = await fetch(
-          `/api/flows/${selectedFlowId}/initialize`
-        );
+        const response = await fetch(`/api/flows/${selectedFlowId}/initialize`);
         const data = await response.json();
 
         if (data.status === "success") {
@@ -159,7 +157,7 @@ export default function Flow() {
     setError(null);
     setResult(null);
     setIsRunningFlow(true);
-    setResetKey(prev => prev + 1); // Increment reset key to trigger state reset
+    setResetKey((prev) => prev + 1); // Increment reset key to trigger state reset
 
     // Convert input fields to the expected format
     const inputs: Record<string, string> = {};
@@ -220,7 +218,11 @@ export default function Flow() {
             onClick={toggleDarkMode}
             className="h-8 w-8"
           >
-            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {isDarkMode ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </header>
@@ -331,9 +333,9 @@ export default function Flow() {
 
           {/* Flow Visualization Canvas */}
           {selectedFlowId && (
-            <FlowCanvas 
-              flowId={selectedFlowId} 
-              isRunning={isRunningFlow} 
+            <FlowCanvas
+              flowId={selectedFlowId}
+              isRunning={isRunningFlow}
               resetKey={resetKey}
             />
           )}
