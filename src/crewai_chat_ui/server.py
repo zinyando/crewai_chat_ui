@@ -492,13 +492,19 @@ async def execute_tool(tool_name: str, request: ToolExecuteRequest) -> JSONRespo
                 logging.error(f"Error executing class-based tool: {str(e)}")
                 raise Exception(f"Failed to execute tool: {str(e)}")
         else:
-            # Function-based tool: call directly
+            # Function-based tool: might be a function or a BaseTool instance returned by @tool decorator
             try:
-                result = tool_attr(**inputs)
+                # Check if it's a BaseTool instance (from @tool decorator)
+                if hasattr(tool_attr, "_run"):
+                    # It's a BaseTool instance, use _run method
+                    result = tool_attr._run(**inputs)
+                else:
+                    # It's a regular function, call directly
+                    result = tool_attr(**inputs)
+                    
                 # Handle async functions
                 if inspect.iscoroutine(result):
                     import asyncio
-
                     result = asyncio.run(result)
             except Exception as e:
                 logging.error(f"Error executing function-based tool: {str(e)}")
