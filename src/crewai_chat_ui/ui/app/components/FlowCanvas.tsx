@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import {
   ReactFlow,
   Background,
@@ -14,6 +15,7 @@ import "@xyflow/react/dist/style.css";
 import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 
 // Initial empty arrays with proper types
 const initialNodes: Node[] = [];
@@ -23,7 +25,7 @@ interface FlowCanvasProps {
   flowId: string;
   isRunning: boolean;
   resetKey: number; // Key to trigger reset
-  viewMode?: 'init' | 'execution'; // New prop to control view mode
+  viewMode?: "init" | "execution"; // New prop to control view mode
 }
 
 interface FlowState {
@@ -196,14 +198,20 @@ const MethodNode = ({ data }: { data: any }) => {
   );
 };
 
-const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: FlowCanvasProps) => {
+const FlowCanvas = ({
+  flowId,
+  isRunning,
+  resetKey,
+  viewMode = "execution",
+}: FlowCanvasProps) => {
+  const navigate = useNavigate();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [state, setState] = useState<FlowState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  
+
   // State for initialization view
   const [flowStructure, setFlowStructure] = useState<any>(null);
   const [loadingStructure, setLoadingStructure] = useState(false);
@@ -225,62 +233,68 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
 
   // Fetch flow structure for initialization view
   useEffect(() => {
-    if (!flowId || viewMode !== 'init') return;
-    
+    if (!flowId || viewMode !== "init") return;
+
     const fetchFlowStructure = async () => {
       setLoadingStructure(true);
       setError(null);
-      
+
       try {
         // First check if the flow exists
-        const flowsResponse = await fetch('/api/flows');
+        const flowsResponse = await fetch("/api/flows");
         const flowsData = await flowsResponse.json();
-        
-        if (flowsData.status === 'success') {
-          const flowExists = flowsData.flows.some((flow: any) => flow.id === flowId);
-          
+
+        if (flowsData.status === "success") {
+          const flowExists = flowsData.flows.some(
+            (flow: any) => flow.id === flowId
+          );
+
           if (!flowExists) {
-            setError(`Flow with ID ${flowId} not found. Please select a valid flow.`);
+            setError(
+              `Flow with ID ${flowId} not found. Please select a valid flow.`
+            );
             setLoadingStructure(false);
             return;
           }
         }
-        
+
         // Fetch the flow structure
         const response = await fetch(`/api/flows/${flowId}/structure`);
-        
+
         if (!response.ok) {
           if (response.status === 404) {
-            setError(`Flow with ID ${flowId} not found. Please select a valid flow.`);
+            setError(
+              `Flow with ID ${flowId} not found. Please select a valid flow.`
+            );
           } else {
             setError(`Error fetching flow structure: ${response.statusText}`);
           }
           setLoadingStructure(false);
           return;
         }
-        
+
         const data = await response.json();
-        
-        if (data.status === 'success' && data.flow) {
+
+        if (data.status === "success" && data.flow) {
           setFlowStructure(data.flow);
           createInitializationVisualization(data.flow);
         } else {
-          setError(data.detail || 'Failed to fetch flow structure');
+          setError(data.detail || "Failed to fetch flow structure");
         }
       } catch (err) {
-        console.error('Error fetching flow structure:', err);
-        setError('Failed to fetch flow structure. Please try again.');
+        console.error("Error fetching flow structure:", err);
+        setError("Failed to fetch flow structure. Please try again.");
       } finally {
         setLoadingStructure(false);
       }
     };
-    
+
     fetchFlowStructure();
   }, [flowId, viewMode]);
 
   // Connect to WebSocket when flowId changes or isRunning becomes true
   useEffect(() => {
-    if (!flowId || !isRunning || viewMode !== 'execution') return;
+    if (!flowId || !isRunning || viewMode !== "execution") return;
 
     setLoading(true);
     setError(null);
@@ -333,7 +347,7 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
 
   // Create nodes and edges based on flow state for execution view
   useEffect(() => {
-    if (!state || viewMode !== 'execution') return;
+    if (!state || viewMode !== "execution") return;
 
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
@@ -464,14 +478,14 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
         return "#9e9e9e"; // Gray
     }
   };
-  
+
   // Create visualization for initialization view
   const createInitializationVisualization = (flowData: any) => {
     if (!flowData) return;
-    
+
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
-    
+
     // Create flow node (main/root node)
     const flowNode: Node = {
       id: `flow-${flowData.id}`,
@@ -484,48 +498,52 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
       },
     };
     newNodes.push(flowNode);
-    
+
     // Process methods to determine hierarchical levels
     const methods = flowData.methods || [];
     const stepMethods = methods.filter((m: any) => m.is_step);
     const nonStepMethods = methods.filter((m: any) => !m.is_step);
-    
+
     // Create a map of method dependencies
     const dependencyMap = new Map();
     methods.forEach((method: any) => {
       dependencyMap.set(method.id, method.dependencies || []);
     });
-    
+
     // Calculate levels for non-step methods based on dependencies
     const levels: any[] = [];
     const processedMethods = new Set();
-    
+
     // Add step methods to level 0
     if (stepMethods.length > 0) {
       levels[0] = stepMethods;
       stepMethods.forEach((m: any) => processedMethods.add(m.id));
     }
-    
+
     // Process remaining methods by dependencies
     let currentLevel = 1;
     let allProcessed = false;
-    
+
     while (!allProcessed) {
       const methodsForCurrentLevel = nonStepMethods.filter((m: any) => {
         if (processedMethods.has(m.id)) return false;
-        
+
         // Check if all dependencies are already processed
         const deps = dependencyMap.get(m.id) || [];
-        return deps.every((dep: string) => processedMethods.has(dep) || !dependencyMap.has(dep));
+        return deps.every(
+          (dep: string) => processedMethods.has(dep) || !dependencyMap.has(dep)
+        );
       });
-      
+
       if (methodsForCurrentLevel.length > 0) {
         levels[currentLevel] = methodsForCurrentLevel;
         methodsForCurrentLevel.forEach((m: any) => processedMethods.add(m.id));
         currentLevel++;
       } else {
         // Handle remaining methods (possible circular dependencies)
-        const remainingMethods = nonStepMethods.filter((m: any) => !processedMethods.has(m.id));
+        const remainingMethods = nonStepMethods.filter(
+          (m: any) => !processedMethods.has(m.id)
+        );
         if (remainingMethods.length > 0) {
           levels[currentLevel] = remainingMethods;
           // Add each method ID individually instead of using spread operator
@@ -533,18 +551,18 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
         }
         break;
       }
-      
+
       // Check if all methods are processed
       allProcessed = methods.every((m: any) => processedMethods.has(m.id));
     }
-    
+
     // Position nodes based on levels
     levels.forEach((methodsInLevel, level) => {
       const y = 150 + level * 150;
       const methodCount = methodsInLevel.length;
       const totalWidth = methodCount * 250;
       const startX = 400 - totalWidth / 2 + 125;
-      
+
       methodsInLevel.forEach((method: any, index: number) => {
         const methodNode: Node = {
           id: `method-${method.id}`,
@@ -559,7 +577,7 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
           },
         };
         newNodes.push(methodNode);
-        
+
         // Create edge from flow to step methods
         if (method.is_step) {
           newEdges.push({
@@ -577,7 +595,7 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
             },
           });
         }
-        
+
         // Create edges for dependencies
         if (method.dependencies && method.dependencies.length > 0) {
           method.dependencies.forEach((depId: string) => {
@@ -603,46 +621,55 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
         }
       });
     });
-    
+
     setNodes(newNodes);
     setEdges(newEdges);
   };
 
   return (
-    <div className="w-full h-[calc(100vh-180px)] border rounded-lg overflow-hidden bg-background">
+    <div className="w-full h-full border rounded-lg overflow-hidden bg-background flex flex-col">
+      <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
+        <h3 className="font-semibold text-lg">Crew Execution Visualization</h3>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate("/flow/traces")}
+        >
+          View Traces
+        </Button>
+      </div>
       {(loading || loadingStructure) && (
         <div className="absolute inset-0 flex items-center justify-center z-10 bg-background/80">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
             <p className="text-sm text-muted-foreground">
-              {viewMode === 'execution' ? 'Connecting to flow execution...' : 'Loading flow structure...'}
+              {viewMode === "execution"
+                ? "Connecting to flow execution..."
+                : "Loading flow structure..."}
             </p>
           </div>
         </div>
       )}
 
-      {error && (
-        <Alert variant="destructive" className="m-4">
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {viewMode === 'execution' && !isRunning && !state && !loading && (
+      {viewMode === "execution" && !isRunning && !state && !loading && (
         <div className="flex items-center justify-center h-full">
           <div className="text-center max-w-md">
-            <h3 className="text-lg font-medium mb-2">Flow Execution Visualization</h3>
+            <h3 className="text-lg font-medium mb-2">
+              Flow Execution Visualization
+            </h3>
             <p className="text-sm text-muted-foreground">
               Run the flow to see its execution visualized here.
             </p>
           </div>
         </div>
       )}
-      
-      {viewMode === 'init' && !flowStructure && !loadingStructure && !error && (
+
+      {viewMode === "init" && !flowStructure && !loadingStructure && !error && (
         <div className="flex items-center justify-center h-full">
           <div className="text-center max-w-md">
-            <h3 className="text-lg font-medium mb-2">Flow Structure Visualization</h3>
+            <h3 className="text-lg font-medium mb-2">
+              Flow Structure Visualization
+            </h3>
             <p className="text-sm text-muted-foreground">
               Select a flow to visualize its structure.
             </p>
@@ -650,42 +677,20 @@ const FlowCanvas = ({ flowId, isRunning, resetKey, viewMode = 'execution' }: Flo
         </div>
       )}
 
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        fitView
-      >
-        <Background />
-        <Controls />
-        <MiniMap />
-        <Panel position="top-right">
-          <div className="bg-background border rounded-md p-2 shadow-sm">
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium">Status:</span>
-              {state ? (
-                <Badge
-                  variant={
-                    state.status === "running"
-                      ? "secondary"
-                      : state.status === "completed"
-                      ? "outline" // Changed from "success" to "outline" to fix type error
-                      : state.status === "failed"
-                      ? "destructive"
-                      : "outline"
-                  }
-                >
-                  {state.status}
-                </Badge>
-              ) : (
-                <Badge variant="outline">Not started</Badge>
-              )}
-            </div>
-          </div>
-        </Panel>
-      </ReactFlow>
+      <div className="flex-grow w-full h-full relative">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={nodeTypes}
+          fitView
+        >
+          <Background />
+          <Controls />
+          <MiniMap />
+        </ReactFlow>
+      </div>
     </div>
   );
 };
