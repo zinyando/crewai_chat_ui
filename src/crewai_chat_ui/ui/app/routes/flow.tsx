@@ -306,66 +306,53 @@ export default function Flow() {
               </div>
             )}
 
-            <div className="flex items-center space-x-2 mb-4">
-              <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "init" | "execution")}>
-                <TabsList>
-                  <TabsTrigger value="init">Structure</TabsTrigger>
-                  <TabsTrigger value="execution">Execution</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-            
-            {viewMode === "execution" && (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <h3 className="text-lg font-semibold">Required Inputs</h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <h3 className="text-lg font-semibold">Required Inputs</h3>
 
-                {inputFields.map((field) => (
-                  <div key={field.name} className="space-y-2">
-                    <Label htmlFor={field.name}>{field.name}</Label>
-                    {field.name.toLowerCase().includes("prompt") ? (
-                      <Textarea
-                        id={field.name}
-                        placeholder={field.description}
-                        value={field.value}
-                        onChange={(e) =>
-                          handleInputChange(field.name, e.target.value)
-                        }
-                        className="min-h-[100px]"
-                      />
-                    ) : (
-                      <Input
-                        id={field.name}
-                        placeholder={field.description}
-                        value={field.value}
-                        onChange={(e) =>
-                          handleInputChange(field.name, e.target.value)
-                        }
-                      />
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      {field.description}
-                    </p>
-                  </div>
-                ))}
-
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={
-                    loading || inputFields.some((field) => !field.value)
-                  }
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Running Flow...
-                    </>
+              {inputFields.map((field) => (
+                <div key={field.name} className="space-y-2">
+                  <Label htmlFor={field.name}>{field.name}</Label>
+                  {field.name.toLowerCase().includes("prompt") ? (
+                    <Textarea
+                      id={field.name}
+                      placeholder={field.description}
+                      value={field.value}
+                      onChange={(e) =>
+                        handleInputChange(field.name, e.target.value)
+                      }
+                      className="min-h-[100px]"
+                    />
                   ) : (
-                    "Run Flow"
+                    <Input
+                      id={field.name}
+                      placeholder={field.description}
+                      value={field.value}
+                      onChange={(e) =>
+                        handleInputChange(field.name, e.target.value)
+                      }
+                    />
                   )}
-                </Button>
-              </form>
-            )}
+                  <p className="text-xs text-muted-foreground">
+                    {field.description}
+                  </p>
+                </div>
+              ))}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || inputFields.some((field) => !field.value)}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Running Flow...
+                  </>
+                ) : (
+                  "Run Flow"
+                )}
+              </Button>
+            </form>
           </div>
         </aside>
 
