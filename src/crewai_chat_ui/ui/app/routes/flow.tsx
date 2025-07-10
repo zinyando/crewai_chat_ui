@@ -66,25 +66,27 @@ export default function Flow() {
   // Fetch available flows on component mount
   useEffect(() => {
     const fetchFlows = async () => {
+      setLoading(true);
       try {
         const response = await fetch("/api/flows");
         const data = await response.json();
         if (data.flows) {
           setFlows(data.flows);
 
-          // Always select the first flow from the latest API response
-          // This ensures we're using the most up-to-date flow ID
           if (data.flows.length > 0) {
-            // Check if the currently selected flow ID still exists in the response
-            const flowStillExists = data.flows.some(
+            // If no flow is selected or the selected one is no longer valid,
+            // select the first one from the new list.
+            const currentFlowIsValid = data.flows.some(
               (flow: { id: string }) => flow.id === selectedFlowId
             );
-
-            if (!flowStillExists || !selectedFlowId) {
-              console.log(`Selecting flow ID: ${data.flows[0].id}`);
+            if (!currentFlowIsValid) {
               setSelectedFlowId(data.flows[0].id);
             }
           } else {
+            // No flows are available, clear selection and details
+            setSelectedFlowId("");
+            setFlowDetails(null);
+            setInputFields([]);
             setError("No flows available. Please check your configuration.");
           }
         }
@@ -96,18 +98,8 @@ export default function Flow() {
       }
     };
 
-    if (!flows.length) {
-      setLoading(true);
-      fetchFlows();
-    } else {
-      // If flows are already loaded but no flow is selected, select the first one
-      if (flows.length > 0 && !selectedFlowId) {
-        console.log(`Selecting flow ID: ${flows[0].id}`);
-        setSelectedFlowId(flows[0].id);
-      }
-      setLoading(false);
-    }
-  }, [flows.length, setFlows, selectedFlowId]);
+    fetchFlows();
+  }, [setFlows]);
 
   // Fetch flow details and required inputs when a flow is selected
   useEffect(() => {
