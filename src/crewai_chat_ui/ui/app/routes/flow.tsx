@@ -14,6 +14,7 @@ import {
 import { useChatStore } from "~/lib/store";
 import { ArrowLeft, Loader2, Moon, Sun } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import ReactMarkdown from "react-markdown";
 import FlowCanvas from "../components/FlowCanvas";
 
@@ -48,7 +49,7 @@ export default function Flow() {
   const [flowDetails, setFlowDetails] = useState<FlowDetails | null>(null);
   const [inputFields, setInputFields] = useState<InputField[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"init" | "execution">("execution");
+  const [viewMode, setViewMode] = useState<"init" | "execution">("init");
   const [result, setResult] = useState<string | null>(null);
   const [isRunningFlow, setIsRunningFlow] = useState(false);
   const [resetKey, setResetKey] = useState(0); // Key to trigger reset in FlowCanvas
@@ -193,6 +194,7 @@ export default function Flow() {
     setError(null);
     setResult(null);
     setIsRunningFlow(true);
+    setViewMode("execution"); // Switch to execution view when running the flow
     setResetKey((prev) => prev + 1); // Increment reset key to trigger state reset
 
     // Convert input fields to the expected format
@@ -272,7 +274,12 @@ export default function Flow() {
               <h3 className="text-lg font-semibold">Select a Flow</h3>
               <Select
                 value={selectedFlowId}
-                onValueChange={setSelectedFlowId}
+                onValueChange={(value) => {
+                  setSelectedFlowId(value);
+                  // Reset the view mode to init when selecting a new flow
+                  setViewMode("init");
+                  setResetKey((prev) => prev + 1);
+                }}
                 disabled={loading}
               >
                 <SelectTrigger id="flow-select" className="w-full">
@@ -299,6 +306,15 @@ export default function Flow() {
               </div>
             )}
 
+            <div className="flex items-center space-x-2 mb-4">
+              <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "init" | "execution")}>
+                <TabsList>
+                  <TabsTrigger value="init">Structure</TabsTrigger>
+                  <TabsTrigger value="execution">Execution</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            
             {viewMode === "execution" && (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <h3 className="text-lg font-semibold">Required Inputs</h3>
