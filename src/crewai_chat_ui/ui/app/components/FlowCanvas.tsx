@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router";
 import {
   ReactFlow,
@@ -30,16 +30,73 @@ const initialEdges: Edge[] = [];
  */
 const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
 
-// Fixed node dimensions for all nodes
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 100;
+// Default minimum node dimensions
+const MIN_NODE_WIDTH = 180;
+const MIN_NODE_HEIGHT = 80;
+
+// Default padding to add to content size
+const NODE_PADDING_X = 32; // 16px padding on each side
+const NODE_PADDING_Y = 24; // 12px padding on top and bottom
 
 /**
- * Helper function to get node dimensions - all nodes have the same size
+ * Helper function to get node dimensions based on content
  */
-const getNodeDimensions = (node: Node): { width: number; height: number } => {
-  return { width: NODE_WIDTH, height: NODE_HEIGHT };
-};
+function getNodeDimensions(node: Node): { width: number; height: number } {
+  // Default dimensions
+  const defaultWidth = 220;
+  const defaultHeight = 100;
+  const minWidth = 180;
+  const maxWidth = 400;
+  const minHeight = 80;
+  const maxHeight = 400;
+
+  // If node has measured dimensions, use those
+  if (node.data?.measured && 
+      typeof node.data.measured === 'object' && 
+      'width' in node.data.measured && 
+      'height' in node.data.measured) {
+    // Cast to the correct type to avoid TypeScript errors
+    const measured = node.data.measured as { width: number; height: number };
+    // Add some padding to the measured dimensions to avoid text clipping
+    const paddingWidth = 20;
+    const paddingHeight = 10;
+    
+    // Only use measured values if they're valid numbers
+    if (typeof measured.width === 'number' && typeof measured.height === 'number' && 
+        measured.width > 0 && measured.height > 0) {
+      return {
+        width: Math.max(minWidth, Math.min(maxWidth, measured.width + paddingWidth)),
+        height: Math.max(minHeight, Math.min(maxHeight, measured.height + paddingHeight)),
+      };
+    }
+  }
+
+  // Otherwise estimate based on content
+  let width = defaultWidth;
+  let height = defaultHeight;
+
+  // Adjust width based on label length
+  if (node.data?.label && typeof node.data.label === 'string') {
+    const labelLength = node.data.label.length;
+    width = Math.max(minWidth, Math.min(maxWidth, labelLength * 10));
+  }
+
+  // Adjust height based on content
+  if (node.data?.description) height += 20;
+  if (node.data?.error) height += 40;
+  if (node.data?.dependencies && Array.isArray(node.data.dependencies)) {
+    height += 20 + node.data.dependencies.length * 20;
+  }
+  if (node.data?.flowMethod) height += 20;
+  
+  // If node has outputs, add more height
+  if (node.data?.outputs && typeof node.data.outputs === 'object') {
+    const outputSize = JSON.stringify(node.data.outputs).length;
+    height += Math.min(200, outputSize / 5); // Cap at 200px additional height
+  }
+
+  return { width, height };
+}
 
 /**
  * Layout nodes and edges using Dagre algorithm
@@ -61,10 +118,11 @@ function getLayoutedElements(
     dagreGraph.removeNode(node.id);
   });
 
-  // Add nodes to the graph with consistent dimensions
+  // Add nodes to the graph with dimensions based on content
   nodes.forEach((node) => {
-    // Use the fixed dimensions directly for consistent node sizing
-    dagreGraph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+    // Get dimensions for this specific node based on its content
+    const { width, height } = getNodeDimensions(node);
+    dagreGraph.setNode(node.id, { width, height });
   });
 
   // Add edges to the graph
@@ -92,9 +150,9 @@ function getLayoutedElements(
     return {
       ...node,
       position: {
-        // Use fixed dimensions for consistent positioning
-        x: dagreNode.x - NODE_WIDTH / 2,
-        y: dagreNode.y - NODE_HEIGHT / 2,
+        // Use node-specific dimensions for positioning
+        x: dagreNode.x - getNodeDimensions(node).width / 2,
+        y: dagreNode.y - getNodeDimensions(node).height / 2,
       },
     };
   });
@@ -130,8 +188,70 @@ interface FlowStep {
   dependencies?: string[];
 }
 
+/**
+ * Custom hook to measure a DOM element's dimensions
+ */
+function useMeasureNode() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  
+  useEffect(() => {
+    // Safe update function that checks if ref is valid
+    const updateMeasurements = () => {
+      if (ref.current) {
+        const { offsetWidth, offsetHeight } = ref.current;
+        if (offsetWidth > 0 && offsetHeight > 0) {
+          setDimensions({ width: offsetWidth, height: offsetHeight });
+        }
+      }
+    };
+    
+    // Initial measurement with a small delay to ensure DOM is ready
+    const initialTimer = setTimeout(updateMeasurements, 0);
+    
+    // Set up a ResizeObserver to detect content changes
+    let resizeObserver: ResizeObserver | null = null;
+    try {
+      resizeObserver = new ResizeObserver(() => {
+        if (ref.current) {
+          updateMeasurements();
+        }
+      });
+      
+      if (ref.current) {
+        resizeObserver.observe(ref.current);
+      }
+    } catch (error) {
+      console.error('ResizeObserver error:', error);
+    }
+    
+    return () => {
+      clearTimeout(initialTimer);
+      if (resizeObserver && ref.current) {
+        try {
+          resizeObserver.unobserve(ref.current);
+          resizeObserver.disconnect();
+        } catch (error) {
+          console.error('Error cleaning up ResizeObserver:', error);
+        }
+      }
+    };
+  }, []);
+  
+  return { ref, dimensions };
+}
+
 // Custom node components
 const FlowNode = ({ data }: { data: any }) => {
+  const { ref, dimensions } = useMeasureNode();
+  
+  // Update the node data with measured dimensions
+  useEffect(() => {
+    if (dimensions.width > 0 && dimensions.height > 0) {
+      data.measured = dimensions;
+    }
+  }, [dimensions, data]);
+  
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
@@ -146,7 +266,7 @@ const FlowNode = ({ data }: { data: any }) => {
   };
 
   return (
-    <div className="px-4 py-2 shadow-md rounded-md border bg-card w-[220px] h-[100px] flex flex-col justify-center">
+    <div ref={ref} className="px-4 py-2 shadow-md rounded-md border bg-card">
       <div className="flex flex-col">
         <div className="flex items-center">
           <div
@@ -162,7 +282,7 @@ const FlowNode = ({ data }: { data: any }) => {
               data.status === "running"
                 ? "secondary"
                 : data.status === "completed"
-                ? "outline" // Changed from "success" to "outline" to fix type error
+                ? "outline" 
                 : data.status === "failed"
                 ? "destructive"
                 : "outline"
@@ -177,6 +297,15 @@ const FlowNode = ({ data }: { data: any }) => {
 };
 
 const StepNode = ({ data }: { data: any }) => {
+  const { ref, dimensions } = useMeasureNode();
+  
+  // Update the node data with measured dimensions
+  useEffect(() => {
+    if (dimensions.width > 0 && dimensions.height > 0) {
+      data.measured = dimensions;
+    }
+  }, [dimensions, data]);
+  
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
@@ -191,7 +320,7 @@ const StepNode = ({ data }: { data: any }) => {
   };
 
   return (
-    <div className="px-4 py-2 shadow-md rounded-md border bg-card min-w-[200px] relative">
+    <div ref={ref} className="px-4 py-2 shadow-md rounded-md border bg-card relative">
       {/* Handles for vertical flow */}
       <Handle
         type="target"
@@ -236,30 +365,58 @@ const StepNode = ({ data }: { data: any }) => {
         {data.error && (
           <div className="mt-2 text-xs text-red-500">Error: {data.error}</div>
         )}
+        {data.dependencies && Array.isArray(data.dependencies) && data.dependencies.length > 0 && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            <div className="font-semibold">Dependencies:</div>
+            {data.dependencies.map((dep: string, i: number) => (
+              <div key={i} className="ml-2">{dep}</div>
+            ))}
+          </div>
+        )}
+        {data.flowMethod && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            <span className="font-semibold">Method:</span> {data.flowMethod}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 const OutputNode = ({ data }: { data: any }) => {
+  const { ref, dimensions } = useMeasureNode();
+  
+  // Update the node data with measured dimensions
+  useEffect(() => {
+    if (dimensions.width > 0 && dimensions.height > 0) {
+      data.measured = dimensions;
+    }
+  }, [dimensions, data]);
+  
   return (
-    <div className="px-4 py-2 shadow-md rounded-md border bg-card w-[220px] h-[100px] flex flex-col justify-center">
+    <div ref={ref} className="px-4 py-2 shadow-md rounded-md border bg-card">
       <div className="flex flex-col">
         <div className="font-bold mb-2">Flow Output</div>
         <div className="text-xs overflow-auto max-h-[200px]">
-          <pre className="whitespace-pre-wrap break-words">
-            {JSON.stringify(data.outputs, null, 2)}
-          </pre>
+          {data.output ? JSON.stringify(data.output) : "No output yet"}
         </div>
       </div>
     </div>
   );
 };
 
-// Method node for initialization view
 const MethodNode = ({ data }: { data: any }) => {
+  const { ref, dimensions } = useMeasureNode();
+  
+  // Update the node data with measured dimensions
+  useEffect(() => {
+    if (dimensions.width > 0 && dimensions.height > 0) {
+      data.measured = dimensions;
+    }
+  }, [dimensions, data]);
+  
   return (
-    <div className="px-4 py-2 shadow-md rounded-md border bg-card min-w-[200px] relative">
+    <div ref={ref} className="px-4 py-2 shadow-md rounded-md border bg-card relative">
       {/* Handles for vertical flow */}
       <Handle
         type="target"
@@ -317,8 +474,41 @@ const FlowCanvas = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Layout direction state (TB = top-to-bottom, LR = left-to-right)
+  // Layout direction state  
   const [layoutDirection, setLayoutDirection] = useState<"TB" | "LR">("TB");
+  
+  // Handle refresh layout button click
+  const handleRefreshLayout = useCallback(() => {
+    if (nodes.length > 0) {
+      // First pass: Apply layout with current measurements
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+        nodes,
+        edges,
+        layoutDirection
+      );
+      setNodes([...layoutedNodes]);
+      setEdges([...layoutedEdges]);
+      
+      // Second pass: Allow nodes to remeasure and then apply layout again
+      setTimeout(() => {
+        const { nodes: refinedNodes, edges: refinedEdges } = getLayoutedElements(
+          layoutedNodes,
+          layoutedEdges,
+          layoutDirection
+        );
+        setNodes([...refinedNodes]);
+        setEdges([...refinedEdges]);
+      }, 50);
+    }
+  }, [nodes, edges, layoutDirection, setNodes, setEdges]);
+
+  // Add a toggle button for layout direction
+  const toggleLayoutDirection = useCallback(() => {
+    setLayoutDirection(prev => (prev === "TB" ? "LR" : "TB"));
+    
+    // Force layout recalculation after direction change
+    setTimeout(() => handleRefreshLayout(), 50);
+  }, [setLayoutDirection, handleRefreshLayout]);
 
   // State for initialization view
   const [flowStructure, setFlowStructure] = useState<any>(null);
@@ -577,6 +767,36 @@ const FlowCanvas = ({
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
   }, [state, setNodes, setEdges, layoutDirection]);
+
+  // Update layout when nodes, edges, or layout direction changes
+  useEffect(() => {
+    if (nodes.length > 0) {
+      // Check if nodes have measured dimensions
+      const hasMeasuredNodes = nodes.some(node => 
+        node.data?.measured && 
+        typeof node.data.measured === 'object' && 
+        'width' in node.data.measured && 
+        'height' in node.data.measured
+      );
+      
+      // Apply layout with current measurements
+      const { nodes: layoutedNodes, edges: layoutedEdges, fullWidth, fullHeight } =
+        getLayoutedElements(nodes, edges, layoutDirection);
+      setNodes(layoutedNodes);
+      setEdges(layoutedEdges);
+      
+      // If nodes have been measured, schedule another layout update to use the measurements
+      if (hasMeasuredNodes) {
+        // Use requestAnimationFrame for smoother updates
+        requestAnimationFrame(() => {
+          const { nodes: refinedNodes, edges: refinedEdges } =
+            getLayoutedElements(layoutedNodes, layoutedEdges, layoutDirection);
+          setNodes(refinedNodes);
+          setEdges(refinedEdges);
+        });
+      }
+    }
+  }, [nodes, edges, layoutDirection, setNodes, setEdges]);
 
   // Helper function to get color based on status
   const getStatusColor = (status: string) => {
