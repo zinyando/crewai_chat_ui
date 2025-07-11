@@ -703,49 +703,99 @@ const FlowCanvas = ({
 
     setLoading(true);
     setError(null);
-
-    // Determine WebSocket URL based on current location
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/flow/${flowId}`;
-
-    const newSocket = new WebSocket(wsUrl);
-
-    newSocket.onopen = () => {
-      console.log("WebSocket connected for flow:", flowId);
-      setLoading(false);
-    };
-
-    newSocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log("Flow WebSocket message:", data);
-
-        if (data.type === "flow_state") {
-          setState(data.payload);
-        } else if (data.type === "error") {
-          setError(data.message || "An error occurred during flow execution");
+    
+    // Track connection attempts
+    let connectionAttempts = 0;
+    const maxConnectionAttempts = 3;
+    let connectionTimer: ReturnType<typeof setTimeout> | null = null;
+    
+    // Function to create and connect WebSocket
+    const connectWebSocket = () => {
+      // Determine WebSocket URL based on current location
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws/flow/${flowId}`;
+      
+      console.log(`Connecting to WebSocket (attempt ${connectionAttempts + 1}): ${wsUrl}`);
+      
+      const newSocket = new WebSocket(wsUrl);
+      
+      // Set a timeout for connection establishment
+      const connectionTimeout = setTimeout(() => {
+        if (newSocket.readyState !== WebSocket.OPEN) {
+          console.warn("WebSocket connection timeout");
+          newSocket.close();
+          
+          // Try to reconnect if we haven't exceeded max attempts
+          if (connectionAttempts < maxConnectionAttempts) {
+            connectionAttempts++;
+            console.log(`Retrying connection (${connectionAttempts}/${maxConnectionAttempts})`);
+            connectionTimer = setTimeout(connectWebSocket, 1000); // Wait 1 second before retry
+          } else {
+            setError("Failed to connect to flow execution after multiple attempts. Please try again.");
+            setLoading(false);
+          }
         }
-      } catch (err) {
-        console.error("Error parsing WebSocket message:", err);
-      }
-    };
+      }, 5000); // 5 second timeout
 
-    newSocket.onerror = (event) => {
-      console.error("WebSocket error:", event);
-      setError("Failed to connect to flow execution. Please try again.");
-      setLoading(false);
-    };
+      newSocket.onopen = () => {
+        console.log("WebSocket connected for flow:", flowId);
+        clearTimeout(connectionTimeout);
+        setLoading(false);
+      };
 
-    newSocket.onclose = () => {
-      console.log("WebSocket connection closed");
-    };
+      newSocket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("Flow WebSocket message:", data);
 
-    setSocket(newSocket);
+          if (data.type === "flow_state") {
+            setState(data.payload);
+          } else if (data.type === "error") {
+            setError(data.message || "An error occurred during flow execution");
+          }
+        } catch (err) {
+          console.error("Error parsing WebSocket message:", err);
+        }
+      };
+
+      newSocket.onerror = (event) => {
+        console.error("WebSocket error:", event);
+        clearTimeout(connectionTimeout);
+        
+        // Only set error if we've exhausted our retries
+        if (connectionAttempts >= maxConnectionAttempts) {
+          setError("Failed to connect to flow execution. Please try again.");
+          setLoading(false);
+        }
+      };
+
+      newSocket.onclose = (event) => {
+        console.log("WebSocket connection closed", event);
+        clearTimeout(connectionTimeout);
+        
+        // If this wasn't a normal closure and we haven't exceeded retries, try to reconnect
+        if (event.code !== 1000 && event.code !== 1001 && connectionAttempts < maxConnectionAttempts) {
+          connectionAttempts++;
+          console.log(`Connection closed unexpectedly. Retrying (${connectionAttempts}/${maxConnectionAttempts})`);
+          connectionTimer = setTimeout(connectWebSocket, 1000);
+        }
+      };
+
+      setSocket(newSocket);
+    };
+    
+    // Start the connection process
+    connectWebSocket();
 
     // Clean up on unmount
     return () => {
-      if (newSocket) {
-        newSocket.close();
+      if (socket) {
+        socket.close();
+      }
+      
+      // Clear any pending connection timers
+      if (connectionTimer) {
+        clearTimeout(connectionTimer);
       }
     };
   }, [flowId, isRunning, resetKey]);
