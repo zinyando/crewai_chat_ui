@@ -10,7 +10,6 @@ import {
   useNodesState,
   useEdgesState,
   MarkerType,
-  Panel,
 } from "@xyflow/react";
 import type { Node, Edge, NodeTypes } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -39,74 +38,98 @@ const NODE_PADDING_X = 32; // 16px padding on each side
 const NODE_PADDING_Y = 24; // 12px padding on top and bottom
 
 /**
- * Helper function to get node dimensions based on content
+ * Calculate the maximum dimensions needed for all nodes
  */
-function getNodeDimensions(node: Node): { width: number; height: number } {
-  // Default dimensions
-  const defaultWidth = 220;
-  const defaultHeight = 100;
+function calculateMaxNodeDimensions(nodes: Node[]): {
+  width: number;
+  height: number;
+} {
   const minWidth = 180;
   const maxWidth = 400;
   const minHeight = 80;
   const maxHeight = 400;
 
-  // If node has measured dimensions, use those
-  if (node.data?.measured && 
-      typeof node.data.measured === 'object' && 
-      'width' in node.data.measured && 
-      'height' in node.data.measured) {
-    // Cast to the correct type to avoid TypeScript errors
-    const measured = node.data.measured as { width: number; height: number };
-    // Add some padding to the measured dimensions to avoid text clipping
-    const paddingWidth = 20;
-    const paddingHeight = 10;
-    
-    // Only use measured values if they're valid numbers
-    if (typeof measured.width === 'number' && typeof measured.height === 'number' && 
-        measured.width > 0 && measured.height > 0) {
-      return {
-        width: Math.max(minWidth, Math.min(maxWidth, measured.width + paddingWidth)),
-        height: Math.max(minHeight, Math.min(maxHeight, measured.height + paddingHeight)),
-      };
+  let maxCalculatedWidth = minWidth;
+  let maxCalculatedHeight = minHeight;
+
+  nodes.forEach((node) => {
+    let width = 220; // default width
+    let height = 100; // default height
+
+    // If node has measured dimensions, use those
+    if (
+      node.data?.measured &&
+      typeof node.data.measured === "object" &&
+      "width" in node.data.measured &&
+      "height" in node.data.measured
+    ) {
+      const measured = node.data.measured as { width: number; height: number };
+      const paddingWidth = 20;
+      const paddingHeight = 10;
+
+      if (
+        typeof measured.width === "number" &&
+        typeof measured.height === "number" &&
+        measured.width > 0 &&
+        measured.height > 0
+      ) {
+        width = measured.width + paddingWidth;
+        height = measured.height + paddingHeight;
+      }
+    } else {
+      // Otherwise estimate based on content
+      // Adjust width based on label length
+      if (node.data?.label && typeof node.data.label === "string") {
+        const labelLength = node.data.label.length;
+        width = Math.max(minWidth, labelLength * 12);
+      }
+
+      // Adjust height based on content
+      if (node.data?.description) height += 25;
+      if (node.data?.error) height += 40;
+      if (node.data?.dependencies && Array.isArray(node.data.dependencies)) {
+        height += 30 + node.data.dependencies.length * 20;
+      }
+      if (node.data?.flowMethod) height += 25;
+
+      // If node has outputs, add more height
+      if (node.data?.outputs && typeof node.data.outputs === "object") {
+        const outputSize = JSON.stringify(node.data.outputs).length;
+        height += Math.min(200, outputSize / 5);
+      }
     }
-  }
 
-  // Otherwise estimate based on content
-  let width = defaultWidth;
-  let height = defaultHeight;
+    // Constrain to min/max values
+    width = Math.max(minWidth, Math.min(maxWidth, width));
+    height = Math.max(minHeight, Math.min(maxHeight, height));
 
-  // Adjust width based on label length
-  if (node.data?.label && typeof node.data.label === 'string') {
-    const labelLength = node.data.label.length;
-    width = Math.max(minWidth, Math.min(maxWidth, labelLength * 10));
-  }
+    // Update maximums
+    maxCalculatedWidth = Math.max(maxCalculatedWidth, width);
+    maxCalculatedHeight = Math.max(maxCalculatedHeight, height);
+  });
 
-  // Adjust height based on content
-  if (node.data?.description) height += 20;
-  if (node.data?.error) height += 40;
-  if (node.data?.dependencies && Array.isArray(node.data.dependencies)) {
-    height += 20 + node.data.dependencies.length * 20;
-  }
-  if (node.data?.flowMethod) height += 20;
-  
-  // If node has outputs, add more height
-  if (node.data?.outputs && typeof node.data.outputs === 'object') {
-    const outputSize = JSON.stringify(node.data.outputs).length;
-    height += Math.min(200, outputSize / 5); // Cap at 200px additional height
-  }
-
-  return { width, height };
+  return {
+    width: maxCalculatedWidth,
+    height: maxCalculatedHeight,
+  };
 }
 
 /**
- * Layout nodes and edges using Dagre algorithm
- * @returns Object containing layouted nodes, edges, and graph dimensions
+ * Layout nodes and edges using Dagre algorithm with uniform node sizing
  */
 function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
   direction: "TB" | "LR" = "TB"
 ): { nodes: Node[]; edges: Edge[]; fullWidth: number; fullHeight: number } {
+  if (nodes.length === 0) {
+    return { nodes: [], edges: [], fullWidth: 0, fullHeight: 0 };
+  }
+
+  // Calculate the maximum dimensions for all nodes
+  const { width: uniformWidth, height: uniformHeight } =
+    calculateMaxNodeDimensions(nodes);
+
   // Clear the graph to avoid stale data
   dagreGraph.setGraph({});
 
@@ -118,11 +141,9 @@ function getLayoutedElements(
     dagreGraph.removeNode(node.id);
   });
 
-  // Add nodes to the graph with dimensions based on content
+  // Add nodes to the graph with uniform dimensions
   nodes.forEach((node) => {
-    // Get dimensions for this specific node based on its content
-    const { width, height } = getNodeDimensions(node);
-    dagreGraph.setNode(node.id, { width, height });
+    dagreGraph.setNode(node.id, { width: uniformWidth, height: uniformHeight });
   });
 
   // Add edges to the graph
@@ -150,9 +171,14 @@ function getLayoutedElements(
     return {
       ...node,
       position: {
-        // Use node-specific dimensions for positioning
-        x: dagreNode.x - getNodeDimensions(node).width / 2,
-        y: dagreNode.y - getNodeDimensions(node).height / 2,
+        x: dagreNode.x - uniformWidth / 2,
+        y: dagreNode.y - uniformHeight / 2,
+      },
+      // Store uniform dimensions in the node data for CSS styling
+      data: {
+        ...node.data,
+        uniformWidth,
+        uniformHeight,
       },
     };
   });
@@ -193,8 +219,11 @@ interface FlowStep {
  */
 function useMeasureNode() {
   const ref = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
-  
+  const [dimensions, setDimensions] = useState<{
+    width: number;
+    height: number;
+  }>({ width: 0, height: 0 });
+
   useEffect(() => {
     // Safe update function that checks if ref is valid
     const updateMeasurements = () => {
@@ -205,10 +234,10 @@ function useMeasureNode() {
         }
       }
     };
-    
+
     // Initial measurement with a small delay to ensure DOM is ready
     const initialTimer = setTimeout(updateMeasurements, 0);
-    
+
     // Set up a ResizeObserver to detect content changes
     let resizeObserver: ResizeObserver | null = null;
     try {
@@ -217,14 +246,14 @@ function useMeasureNode() {
           updateMeasurements();
         }
       });
-      
+
       if (ref.current) {
         resizeObserver.observe(ref.current);
       }
     } catch (error) {
-      console.error('ResizeObserver error:', error);
+      console.error("ResizeObserver error:", error);
     }
-    
+
     return () => {
       clearTimeout(initialTimer);
       if (resizeObserver && ref.current) {
@@ -232,26 +261,26 @@ function useMeasureNode() {
           resizeObserver.unobserve(ref.current);
           resizeObserver.disconnect();
         } catch (error) {
-          console.error('Error cleaning up ResizeObserver:', error);
+          console.error("Error cleaning up ResizeObserver:", error);
         }
       }
     };
   }, []);
-  
+
   return { ref, dimensions };
 }
 
-// Custom node components
+// Custom node components with uniform sizing
 const FlowNode = ({ data }: { data: any }) => {
   const { ref, dimensions } = useMeasureNode();
-  
+
   // Update the node data with measured dimensions
   useEffect(() => {
     if (dimensions.width > 0 && dimensions.height > 0) {
       data.measured = dimensions;
     }
   }, [dimensions, data]);
-  
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
@@ -265,24 +294,39 @@ const FlowNode = ({ data }: { data: any }) => {
     }
   };
 
+  // Apply uniform sizing if available
+  const nodeStyle =
+    data.uniformWidth && data.uniformHeight
+      ? {
+          width: `${data.uniformWidth}px`,
+          height: `${data.uniformHeight}px`,
+          minWidth: `${data.uniformWidth}px`,
+          minHeight: `${data.uniformHeight}px`,
+        }
+      : {};
+
   return (
-    <div ref={ref} className="px-4 py-2 shadow-md rounded-md border bg-card">
-      <div className="flex flex-col">
-        <div className="flex items-center">
+    <div
+      ref={ref}
+      className="px-4 py-2 shadow-md rounded-md border bg-card flex flex-col justify-center"
+      style={nodeStyle}
+    >
+      <div className="flex flex-col h-full justify-center">
+        <div className="flex items-center justify-center mb-2">
           <div
             className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(
               data.status
             )}`}
           ></div>
-          <div className="font-bold text-lg">{data.label}</div>
+          <div className="font-bold text-lg text-center">{data.label}</div>
         </div>
-        <div className="mt-2">
+        <div className="flex justify-center">
           <Badge
             variant={
               data.status === "running"
                 ? "secondary"
                 : data.status === "completed"
-                ? "outline" 
+                ? "outline"
                 : data.status === "failed"
                 ? "destructive"
                 : "outline"
@@ -298,14 +342,14 @@ const FlowNode = ({ data }: { data: any }) => {
 
 const StepNode = ({ data }: { data: any }) => {
   const { ref, dimensions } = useMeasureNode();
-  
+
   // Update the node data with measured dimensions
   useEffect(() => {
     if (dimensions.width > 0 && dimensions.height > 0) {
       data.measured = dimensions;
     }
   }, [dimensions, data]);
-  
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
@@ -319,8 +363,23 @@ const StepNode = ({ data }: { data: any }) => {
     }
   };
 
+  // Apply uniform sizing if available
+  const nodeStyle =
+    data.uniformWidth && data.uniformHeight
+      ? {
+          width: `${data.uniformWidth}px`,
+          height: `${data.uniformHeight}px`,
+          minWidth: `${data.uniformWidth}px`,
+          minHeight: `${data.uniformHeight}px`,
+        }
+      : {};
+
   return (
-    <div ref={ref} className="px-4 py-2 shadow-md rounded-md border bg-card relative">
+    <div
+      ref={ref}
+      className="px-4 py-2 shadow-md rounded-md border bg-card relative overflow-hidden"
+      style={nodeStyle}
+    >
       {/* Handles for vertical flow */}
       <Handle
         type="target"
@@ -333,21 +392,21 @@ const StepNode = ({ data }: { data: any }) => {
         className="w-2 h-2 bg-slate-500"
       />
 
-      <div className="flex flex-col">
-        <div className="flex items-center">
+      <div className="flex flex-col h-full justify-center">
+        <div className="flex items-center justify-center mb-1">
           <div
             className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(
               data.status
             )}`}
           ></div>
-          <div className="font-bold">{data.label}</div>
+          <div className="font-bold text-center truncate">{data.label}</div>
         </div>
         {data.description && (
-          <div className="mt-1 text-xs text-muted-foreground">
+          <div className="mt-1 text-xs text-muted-foreground text-center truncate">
             {data.description}
           </div>
         )}
-        <div className="mt-2">
+        <div className="mt-2 flex justify-center">
           <Badge
             variant={
               data.status === "running"
@@ -363,18 +422,26 @@ const StepNode = ({ data }: { data: any }) => {
           </Badge>
         </div>
         {data.error && (
-          <div className="mt-2 text-xs text-red-500">Error: {data.error}</div>
-        )}
-        {data.dependencies && Array.isArray(data.dependencies) && data.dependencies.length > 0 && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            <div className="font-semibold">Dependencies:</div>
-            {data.dependencies.map((dep: string, i: number) => (
-              <div key={i} className="ml-2">{dep}</div>
-            ))}
+          <div className="mt-2 text-xs text-red-500 text-center truncate">
+            Error: {data.error}
           </div>
         )}
+        {data.dependencies &&
+          Array.isArray(data.dependencies) &&
+          data.dependencies.length > 0 && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              <div className="font-semibold text-center">Dependencies:</div>
+              <div className="max-h-16 overflow-y-auto">
+                {data.dependencies.map((dep: string, i: number) => (
+                  <div key={i} className="ml-2 truncate">
+                    {dep}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         {data.flowMethod && (
-          <div className="mt-1 text-xs text-muted-foreground">
+          <div className="mt-1 text-xs text-muted-foreground text-center truncate">
             <span className="font-semibold">Method:</span> {data.flowMethod}
           </div>
         )}
@@ -385,19 +452,34 @@ const StepNode = ({ data }: { data: any }) => {
 
 const OutputNode = ({ data }: { data: any }) => {
   const { ref, dimensions } = useMeasureNode();
-  
+
   // Update the node data with measured dimensions
   useEffect(() => {
     if (dimensions.width > 0 && dimensions.height > 0) {
       data.measured = dimensions;
     }
   }, [dimensions, data]);
-  
+
+  // Apply uniform sizing if available
+  const nodeStyle =
+    data.uniformWidth && data.uniformHeight
+      ? {
+          width: `${data.uniformWidth}px`,
+          height: `${data.uniformHeight}px`,
+          minWidth: `${data.uniformWidth}px`,
+          minHeight: `${data.uniformHeight}px`,
+        }
+      : {};
+
   return (
-    <div ref={ref} className="px-4 py-2 shadow-md rounded-md border bg-card">
-      <div className="flex flex-col">
-        <div className="font-bold mb-2">Flow Output</div>
-        <div className="text-xs overflow-auto max-h-[200px]">
+    <div
+      ref={ref}
+      className="px-4 py-2 shadow-md rounded-md border bg-card overflow-hidden"
+      style={nodeStyle}
+    >
+      <div className="flex flex-col h-full">
+        <div className="font-bold mb-2 text-center">Flow Output</div>
+        <div className="text-xs overflow-auto flex-1">
           {data.output ? JSON.stringify(data.output) : "No output yet"}
         </div>
       </div>
@@ -407,16 +489,31 @@ const OutputNode = ({ data }: { data: any }) => {
 
 const MethodNode = ({ data }: { data: any }) => {
   const { ref, dimensions } = useMeasureNode();
-  
+
   // Update the node data with measured dimensions
   useEffect(() => {
     if (dimensions.width > 0 && dimensions.height > 0) {
       data.measured = dimensions;
     }
   }, [dimensions, data]);
-  
+
+  // Apply uniform sizing if available
+  const nodeStyle =
+    data.uniformWidth && data.uniformHeight
+      ? {
+          width: `${data.uniformWidth}px`,
+          height: `${data.uniformHeight}px`,
+          minWidth: `${data.uniformWidth}px`,
+          minHeight: `${data.uniformHeight}px`,
+        }
+      : {};
+
   return (
-    <div ref={ref} className="px-4 py-2 shadow-md rounded-md border bg-card relative">
+    <div
+      ref={ref}
+      className="px-4 py-2 shadow-md rounded-md border bg-card relative overflow-hidden"
+      style={nodeStyle}
+    >
       {/* Handles for vertical flow */}
       <Handle
         type="target"
@@ -429,24 +526,24 @@ const MethodNode = ({ data }: { data: any }) => {
         className="w-2 h-2 bg-slate-500"
       />
 
-      <div className="flex flex-col">
-        <div className="flex items-center">
+      <div className="flex flex-col h-full justify-center">
+        <div className="flex items-center justify-center mb-1">
           {data.is_step && (
             <Badge variant="secondary" className="mr-2">
               Step
             </Badge>
           )}
-          <div className="font-bold">{data.label}</div>
+          <div className="font-bold text-center truncate">{data.label}</div>
         </div>
         {data.description && (
-          <div className="mt-1 text-xs text-muted-foreground">
+          <div className="mt-1 text-xs text-muted-foreground text-center truncate">
             {data.description}
           </div>
         )}
         {data.dependencies && data.dependencies.length > 0 && (
           <div className="mt-2 text-xs">
-            <span className="font-medium">Dependencies:</span>
-            <div className="flex flex-wrap gap-1 mt-1">
+            <div className="font-medium text-center">Dependencies:</div>
+            <div className="flex flex-wrap gap-1 mt-1 justify-center max-h-16 overflow-y-auto">
               {data.dependencies.map((dep: string) => (
                 <Badge key={dep} variant="outline" className="text-xs">
                   {dep}
@@ -474,40 +571,34 @@ const FlowCanvas = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Layout direction state  
+  // Layout direction state
   const [layoutDirection, setLayoutDirection] = useState<"TB" | "LR">("TB");
-  
+
   // Handle refresh layout button click
   const handleRefreshLayout = useCallback(() => {
     if (nodes.length > 0) {
       // First pass: Apply layout with current measurements
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-        nodes,
-        edges,
-        layoutDirection
-      );
+      const { nodes: layoutedNodes, edges: layoutedEdges } =
+        getLayoutedElements(nodes, edges, layoutDirection);
       setNodes([...layoutedNodes]);
       setEdges([...layoutedEdges]);
-      
+
       // Second pass: Allow nodes to remeasure and then apply layout again
       setTimeout(() => {
-        const { nodes: refinedNodes, edges: refinedEdges } = getLayoutedElements(
-          layoutedNodes,
-          layoutedEdges,
-          layoutDirection
-        );
+        const { nodes: refinedNodes, edges: refinedEdges } =
+          getLayoutedElements(layoutedNodes, layoutedEdges, layoutDirection);
         setNodes([...refinedNodes]);
         setEdges([...refinedEdges]);
-      }, 50);
+      }, 100);
     }
   }, [nodes, edges, layoutDirection, setNodes, setEdges]);
 
   // Add a toggle button for layout direction
   const toggleLayoutDirection = useCallback(() => {
-    setLayoutDirection(prev => (prev === "TB" ? "LR" : "TB"));
-    
+    setLayoutDirection((prev) => (prev === "TB" ? "LR" : "TB"));
+
     // Force layout recalculation after direction change
-    setTimeout(() => handleRefreshLayout(), 50);
+    setTimeout(() => handleRefreshLayout(), 100);
   }, [setLayoutDirection, handleRefreshLayout]);
 
   // State for initialization view
@@ -772,31 +863,32 @@ const FlowCanvas = ({
   useEffect(() => {
     if (nodes.length > 0) {
       // Check if nodes have measured dimensions
-      const hasMeasuredNodes = nodes.some(node => 
-        node.data?.measured && 
-        typeof node.data.measured === 'object' && 
-        'width' in node.data.measured && 
-        'height' in node.data.measured
+      const hasMeasuredNodes = nodes.some(
+        (node) =>
+          node.data?.measured &&
+          typeof node.data.measured === "object" &&
+          "width" in node.data.measured &&
+          "height" in node.data.measured
       );
-      
+
       // Apply layout with current measurements
-      const { nodes: layoutedNodes, edges: layoutedEdges, fullWidth, fullHeight } =
+      const { nodes: layoutedNodes, edges: layoutedEdges } =
         getLayoutedElements(nodes, edges, layoutDirection);
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
-      
+
       // If nodes have been measured, schedule another layout update to use the measurements
       if (hasMeasuredNodes) {
-        // Use requestAnimationFrame for smoother updates
-        requestAnimationFrame(() => {
+        // Use a longer timeout to ensure measurements are stable
+        setTimeout(() => {
           const { nodes: refinedNodes, edges: refinedEdges } =
             getLayoutedElements(layoutedNodes, layoutedEdges, layoutDirection);
           setNodes(refinedNodes);
           setEdges(refinedEdges);
-        });
+        }, 150);
       }
     }
-  }, [nodes, edges, layoutDirection, setNodes, setEdges]);
+  }, [nodes.length, edges.length, layoutDirection]); // Reduced dependencies to avoid infinite loops
 
   // Helper function to get color based on status
   const getStatusColor = (status: string) => {
