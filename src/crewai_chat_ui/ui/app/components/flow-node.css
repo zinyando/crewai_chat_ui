@@ -1,33 +1,43 @@
-/* CSS for consistent node dimensions */
-/* Target all React Flow nodes */
+/* CSS for dynamic node dimensions */
+/* Base styling for all React Flow nodes */
 .react-flow__node {
-  width: 220px !important;
-  height: 100px !important;
+  min-width: 180px;
+  min-height: 80px;
+  max-width: 400px;
 }
 
 /* Ensure the inner content of nodes is properly sized */
 .react-flow__node > div {
-  width: 100% !important;
-  height: 100% !important;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* Ensure consistent padding and styling */
-.react-flow__node .px-4 {
-  padding-left: 1rem !important;
-  padding-right: 1rem !important;
+/* Ensure text content doesn't overflow */
+.react-flow__node .font-bold,
+.react-flow__node .text-lg,
+.react-flow__node .text-xs {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Fix for any min-width or min-height settings */
-.react-flow__node [class*="min-w-"],
-.react-flow__node [class*="min-h-"] {
-  min-width: unset !important;
-  min-height: unset !important;
+/* Style for flow method and dependencies */
+.react-flow__node .flow-method,
+.react-flow__node .dependencies {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
 }
 
-/* Fix for any max-width or max-height settings */
-.react-flow__node [class*="max-w-"],
-.react-flow__node [class*="max-h-"] {
-  max-width: unset !important;
-  max-height: unset !important;
+/* Ensure edges connect properly to nodes */
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background-color: var(--border);
+  border: 1px solid var(--border-strong);
 }
