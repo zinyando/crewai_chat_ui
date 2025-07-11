@@ -138,11 +138,21 @@ def extract_flows_from_file(file_path: str) -> List[FlowInfo]:
         # Get the directory of the file for handling relative imports
         file_dir = os.path.dirname(file_path)
 
-        # Add the file's directory to sys.path temporarily to handle relative imports
+        # Add the file's directory _and_ its package root to sys.path temporarily
         sys_path_modified = False
+        pkg_root_modified = False
+
+        # 1. Directory containing the file (so relative imports like '.module' work)
         if file_dir not in sys.path:
             sys.path.insert(0, file_dir)
             sys_path_modified = True
+
+        # 2. Top-level package root (parent dir of file_dir) so absolute imports like
+        #    'flow141.something' succeed when the flow lives in src/flow141/*.py
+        package_root = os.path.dirname(file_dir)
+        if package_root and package_root not in sys.path:
+            sys.path.insert(0, package_root)
+            pkg_root_modified = True
 
         try:
             # Load the module
@@ -219,9 +229,11 @@ def extract_flows_from_file(file_path: str) -> List[FlowInfo]:
             if module_name in sys.modules:
                 del sys.modules[module_name]
 
-            # Remove the directory from sys.path if we added it
+            # Remove temporarily added paths from sys.path
             if sys_path_modified and file_dir in sys.path:
                 sys.path.remove(file_dir)
+            if pkg_root_modified and package_root in sys.path:
+                sys.path.remove(package_root)
 
     except ImportError as e:
         # Common import errors should be logged at debug level
