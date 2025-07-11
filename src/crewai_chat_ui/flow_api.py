@@ -6,6 +6,7 @@ This module provides API endpoints for managing CrewAI flows.
 
 import os
 from typing import Dict, List, Any, Optional
+import inspect
 import logging
 import asyncio
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -368,7 +369,6 @@ async def get_flow_traces(flow_id: str):
     
     return {"status": "success", "traces": flow_traces[flow_id]}
 
-
 @router.get("/{flow_id}/structure")
 async def get_flow_structure(flow_id: str):
     """
@@ -386,45 +386,41 @@ async def get_flow_structure(flow_id: str):
     flow_info = flows_cache[flow_id]
     
     try:
-        # Load the flow class without instantiating it
-        flow_class = flow_info.flow_class
-        
-        # Extract methods from the flow class
+        # Build nodes & edges using pre-extracted metadata from FlowInfo
         methods = []
         dependencies = {}
-        
-        # Get all methods that are steps
-        step_methods = []
-        if hasattr(flow_class, "steps") and isinstance(flow_class.steps, list):
-            step_methods = [step.__name__ if hasattr(step, "__name__") else str(step) 
-                          for step in flow_class.steps]
-        
-        # Extract methods and their dependencies
-        for name in dir(flow_class):
-            # Skip private methods and properties
-            if name.startswith("_") or name in ["steps", "run", "run_async"]:
-                continue
-                
-            attr = getattr(flow_class, name)
-            if callable(attr):
-                # Check if this is a step method
-                is_step = name in step_methods
-                
-                # Get method dependencies if available
-                method_deps = []
-                if hasattr(attr, "dependencies"):
-                    method_deps = attr.dependencies
-                
-                methods.append({
-                    "id": name,
-                    "name": name.replace("_", " ").title(),
-                    "description": attr.__doc__.strip() if attr.__doc__ else "",
-                    "is_step": is_step,
-                    "dependencies": method_deps
-                })
-                
-                dependencies[name] = method_deps
-        
+
+        for m in flow_info.methods:
+            methods.append({
+                "id": m.name,
+                "name": m.name.replace("_", " ").title(),
+                "description": m.description,
+                "is_step": m.is_start or m.is_listener or m.is_router,  # treat all as steps
+                "dependencies": m.listens_to,
+                "is_start": m.is_start,
+                "is_listener": m.is_listener,
+            })
+            dependencies[m.name] = m.listens_to
+
+        # Fallback: if FlowInfo.methods empty (e.g. older cache) use old reflection
+        if not methods:
+            # Use old reflection to get methods
+            methods = []
+            flow_class = getattr(flow_info, "flow_class", None)
+            if flow_class:
+                for name, attr in inspect.getmembers(flow_class, predicate=inspect.isfunction):
+                    if name.startswith("_"):
+                        continue
+                    methods.append({
+                        "id": name,
+                        "name": name.replace("_", " ").title(),
+                        "description": attr.__doc__.strip() if attr.__doc__ else "",
+                        "is_step": True,
+                        "dependencies": getattr(attr, "dependencies", []),
+                        "is_start": getattr(attr, "is_start", False),
+                        "is_listener": getattr(attr, "is_listener", False),
+                    })
+
         # Return the flow structure
         return {
             "status": "success",
