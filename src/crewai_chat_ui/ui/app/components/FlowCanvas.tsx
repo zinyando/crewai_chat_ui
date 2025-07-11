@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   ReactFlow,
+  Handle,
+  Position,
   Background,
   Controls,
   MiniMap,
@@ -110,7 +112,19 @@ const StepNode = ({ data }: { data: any }) => {
   };
 
   return (
-    <div className="px-4 py-2 shadow-md rounded-md border bg-card min-w-[200px]">
+    <div className="px-4 py-2 shadow-md rounded-md border bg-card min-w-[200px] relative">
+      {/* Handles for vertical flow */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-2 h-2 bg-slate-500"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-2 h-2 bg-slate-500"
+      />
+
       <div className="flex flex-col">
         <div className="flex items-center">
           <div
@@ -131,7 +145,7 @@ const StepNode = ({ data }: { data: any }) => {
               data.status === "running"
                 ? "secondary"
                 : data.status === "completed"
-                ? "outline" // Changed from "success" to "outline" to fix type error
+                ? "outline"
                 : data.status === "failed"
                 ? "destructive"
                 : "outline"
@@ -166,7 +180,19 @@ const OutputNode = ({ data }: { data: any }) => {
 // Method node for initialization view
 const MethodNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-2 shadow-md rounded-md border bg-card min-w-[200px]">
+    <div className="px-4 py-2 shadow-md rounded-md border bg-card min-w-[200px] relative">
+      {/* Handles for vertical flow */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-2 h-2 bg-slate-500"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-2 h-2 bg-slate-500"
+      />
+
       <div className="flex flex-col">
         <div className="flex items-center">
           {data.is_step && (
@@ -481,13 +507,13 @@ const FlowCanvas = ({
 
   // Create visualization for initialization view
   const createInitializationVisualization = (flowData: any) => {
-    if (!flowData) return;
+    if (!flowData || !flowData.methods) return;
 
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
 
-    // Create flow node (main/root node)
-    const flowNode: Node = {
+    // Root (flow) node
+    newNodes.push({
       id: `flow-${flowData.id}`,
       type: "flowNode",
       position: { x: 400, y: 50 },
@@ -496,136 +522,71 @@ const FlowCanvas = ({
         status: "pending",
         id: flowData.id,
       },
-    };
-    newNodes.push(flowNode);
-
-    // Process methods to determine hierarchical levels
-    const methods = flowData.methods || [];
-    const stepMethods = methods.filter((m: any) => m.is_step);
-    const nonStepMethods = methods.filter((m: any) => !m.is_step);
-
-    // Create a map of method dependencies
-    const dependencyMap = new Map();
-    methods.forEach((method: any) => {
-      dependencyMap.set(method.id, method.dependencies || []);
     });
 
-    // Calculate levels for non-step methods based on dependencies
-    const levels: any[] = [];
-    const processedMethods = new Set();
+    // Vertical layout variables
+    const verticalGap = 150;
+    const startY = 200;
 
-    // Add step methods to level 0
-    if (stepMethods.length > 0) {
-      levels[0] = stepMethods;
-      stepMethods.forEach((m: any) => processedMethods.add(m.id));
-    }
+    // First, map of methodId -> method for quick lookup
+    const methodMap: Record<string, any> = {};
+    flowData.methods.forEach((m: any) => {
+      methodMap[m.id] = m;
+    });
 
-    // Process remaining methods by dependencies
-    let currentLevel = 1;
-    let allProcessed = false;
-
-    while (!allProcessed) {
-      const methodsForCurrentLevel = nonStepMethods.filter((m: any) => {
-        if (processedMethods.has(m.id)) return false;
-
-        // Check if all dependencies are already processed
-        const deps = dependencyMap.get(m.id) || [];
-        return deps.every(
-          (dep: string) => processedMethods.has(dep) || !dependencyMap.has(dep)
-        );
+    // Add method nodes
+    flowData.methods.forEach((method: any, index: number) => {
+      const nodeY = startY + index * verticalGap;
+      newNodes.push({
+        id: `method-${method.id}`,
+        type: "methodNode",
+        position: { x: 400, y: nodeY },
+        data: {
+          label: method.name,
+          description: method.description,
+          is_step: method.is_step,
+          dependencies: method.dependencies || [],
+        },
       });
 
-      if (methodsForCurrentLevel.length > 0) {
-        levels[currentLevel] = methodsForCurrentLevel;
-        methodsForCurrentLevel.forEach((m: any) => processedMethods.add(m.id));
-        currentLevel++;
-      } else {
-        // Handle remaining methods (possible circular dependencies)
-        const remainingMethods = nonStepMethods.filter(
-          (m: any) => !processedMethods.has(m.id)
-        );
-        if (remainingMethods.length > 0) {
-          levels[currentLevel] = remainingMethods;
-          // Add each method ID individually instead of using spread operator
-          remainingMethods.forEach((m: any) => processedMethods.add(m.id));
-        }
-        break;
+      // Edge from flow root to methods without dependencies
+      if (!method.dependencies || method.dependencies.length === 0) {
+        newEdges.push({
+          id: `edge-flow-${method.id}`,
+          source: `flow-${flowData.id}`,
+          target: `method-${method.id}`,
+          type: "smoothstep",
+          markerEnd: { type: MarkerType.ArrowClosed, color: "#2196f3" },
+          style: { stroke: "#2196f3", strokeWidth: 2 },
+        });
       }
+    });
 
-      // Check if all methods are processed
-      allProcessed = methods.every((m: any) => processedMethods.has(m.id));
-    }
-
-    // Position nodes based on levels
-    levels.forEach((methodsInLevel, level) => {
-      const y = 150 + level * 150;
-      const methodCount = methodsInLevel.length;
-      const totalWidth = methodCount * 250;
-      const startX = 400 - totalWidth / 2 + 125;
-
-      methodsInLevel.forEach((method: any, index: number) => {
-        const methodNode: Node = {
-          id: `method-${method.id}`,
-          type: "methodNode",
-          position: { x: startX + index * 250, y },
-          data: {
-            label: method.name,
-            description: method.description,
-            is_step: method.is_step,
-            dependencies: method.dependencies,
-            id: method.id,
-          },
-        };
-        newNodes.push(methodNode);
-
-        // Create edge from flow to step methods
-        if (method.is_step) {
-          newEdges.push({
-            id: `flow-to-${method.id}`,
-            source: `flow-${flowData.id}`,
-            target: `method-${method.id}`,
-            type: "smoothstep",
-            style: {
-              stroke: "#2196f3",
-              strokeWidth: 2,
-            },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: "#2196f3",
-            },
-          });
-        }
-
-        // Create edges for dependencies
-        if (method.dependencies && method.dependencies.length > 0) {
-          method.dependencies.forEach((depId: string) => {
-            // Only create edges for dependencies that exist in our methods
-            if (methods.some((m: any) => m.id === depId)) {
-              newEdges.push({
-                id: `${depId}-to-${method.id}`,
-                source: `method-${depId}`,
-                target: `method-${method.id}`,
-                type: "smoothstep",
-                style: {
-                  stroke: "#ff9800",
-                  strokeWidth: 2,
-                  strokeDasharray: "5 5",
-                },
-                markerEnd: {
-                  type: MarkerType.ArrowClosed,
-                  color: "#ff9800",
-                },
-              });
-            }
-          });
-        }
-      });
+    // Add dependency edges between method nodes
+    flowData.methods.forEach((method: any) => {
+      if (method.dependencies && method.dependencies.length > 0) {
+        method.dependencies.forEach((depId: string) => {
+          if (methodMap[depId]) {
+            newEdges.push({
+              id: `edge-${depId}-to-${method.id}`,
+              source: `method-${depId}`,
+              target: `method-${method.id}`,
+              type: "smoothstep",
+              markerEnd: { type: MarkerType.ArrowClosed, color: "#ff9800" },
+              style: {
+                stroke: "#ff9800",
+                strokeWidth: 2,
+                strokeDasharray: "5 5",
+              },
+            });
+          }
+        });
+      }
     });
 
     setNodes(newNodes);
     setEdges(newEdges);
   };
-
   return (
     <div className="w-full h-full border rounded-lg overflow-hidden bg-background flex flex-col">
       <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
