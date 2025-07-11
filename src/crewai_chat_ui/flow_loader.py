@@ -53,10 +53,14 @@ class FlowInfo(BaseModel):
     description: str
     file_path: str
     class_name: str
+    flow_class: Any  # Hold actual class object for quick access
     required_inputs: List[FlowInput] = []
     methods: List[FlowMethod] = []
     state_type: str = "unstructured"  # "structured" or "unstructured"
     state_model: Optional[str] = None
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 def discover_flows(directory: str = None) -> List[FlowInfo]:
@@ -384,6 +388,7 @@ def _extract_flow_info(
         description=flow_description,
         file_path=file_path,
         class_name=class_name,
+        flow_class=flow_class,
         required_inputs=required_inputs,
         methods=methods,
         state_type=state_type,
