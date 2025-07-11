@@ -380,17 +380,21 @@ const StepNode = ({ data }: { data: any }) => {
       className="px-4 py-2 shadow-md rounded-md border bg-card relative overflow-hidden"
       style={nodeStyle}
     >
-      {/* Handles for vertical flow */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="w-2 h-2 bg-slate-500"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="w-2 h-2 bg-slate-500"
-      />
+      {/* Handles for vertical flow - conditionally rendered */}
+      {!data.isFirst && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="w-2 h-2 bg-slate-500"
+        />
+      )}
+      {!data.isLast && (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="w-2 h-2 bg-slate-500"
+        />
+      )}
 
       <div className="flex flex-col h-full justify-center">
         <div className="flex items-center justify-center mb-1">
@@ -514,17 +518,21 @@ const MethodNode = ({ data }: { data: any }) => {
       className="px-4 py-2 shadow-md rounded-md border bg-card relative overflow-hidden"
       style={nodeStyle}
     >
-      {/* Handles for vertical flow */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="w-2 h-2 bg-slate-500"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="w-2 h-2 bg-slate-500"
-      />
+      {/* Handles for vertical flow - conditionally rendered */}
+      {!data.isFirst && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="w-2 h-2 bg-slate-500"
+        />
+      )}
+      {!data.isLast && (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="w-2 h-2 bg-slate-500"
+        />
+      )}
 
       <div className="flex flex-col h-full justify-center">
         <div className="flex items-center justify-center mb-1">
@@ -774,6 +782,8 @@ const FlowCanvas = ({
           inputs: step.inputs,
           outputs: step.outputs,
           error: step.error,
+          isFirst: index === 0,
+          isLast: index === stepCount - 1,
         },
       };
       newNodes.push(stepNode);
@@ -979,6 +989,8 @@ const FlowCanvas = ({
           description: method.description,
           is_step: method.is_step,
           dependencies: method.dependencies || [],
+          isFirst: index === 0,
+          isLast: index === sortedMethods.length - 1,
         },
       });
 
