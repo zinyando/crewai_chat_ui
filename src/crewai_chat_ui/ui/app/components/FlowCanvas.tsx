@@ -513,20 +513,22 @@ const FlowCanvas = ({
     const newEdges: Edge[] = [];
 
     // Root (flow) node
-    newNodes.push({
+    const rootNode = {
       id: `flow-${flowData.id}`,
       type: "flowNode",
-      position: { x: 400, y: 50 },
+      position: { x: 0, y: 0 }, // Start at origin, will be repositioned
       data: {
         label: flowData.name,
         status: "pending",
         id: flowData.id,
       },
-    });
+    };
+    newNodes.push(rootNode);
 
-    // Vertical layout variables
-    const verticalGap = 150;
-    const startY = 200;
+    // Improved vertical layout variables
+    const verticalGap = 200; // Increased gap between nodes
+    const horizontalCenter = 0; // Center horizontally
+    const startY = 150; // Distance from root node
 
     // First, map of methodId -> method for quick lookup
     const methodMap: Record<string, any> = {};
@@ -534,13 +536,45 @@ const FlowCanvas = ({
       methodMap[m.id] = m;
     });
 
-    // Add method nodes
-    flowData.methods.forEach((method: any, index: number) => {
+    // Create a topological sort to properly arrange nodes
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const sortedMethods: any[] = [];
+
+    const topologicalSort = (methodId: string) => {
+      if (visiting.has(methodId)) return; // Circular dependency
+      if (visited.has(methodId)) return;
+
+      visiting.add(methodId);
+      const method = methodMap[methodId];
+
+      if (method && method.dependencies) {
+        method.dependencies.forEach((depId: string) => {
+          if (methodMap[depId]) {
+            topologicalSort(depId);
+          }
+        });
+      }
+
+      visiting.delete(methodId);
+      visited.add(methodId);
+      if (method) {
+        sortedMethods.push(method);
+      }
+    };
+
+    // Sort all methods
+    flowData.methods.forEach((method: any) => {
+      topologicalSort(method.id);
+    });
+
+    // Add method nodes with proper vertical spacing
+    sortedMethods.forEach((method: any, index: number) => {
       const nodeY = startY + index * verticalGap;
       newNodes.push({
         id: `method-${method.id}`,
         type: "methodNode",
-        position: { x: 400, y: nodeY },
+        position: { x: horizontalCenter, y: nodeY },
         data: {
           label: method.name,
           description: method.description,
@@ -563,7 +597,7 @@ const FlowCanvas = ({
     });
 
     // Add dependency edges between method nodes
-    flowData.methods.forEach((method: any) => {
+    sortedMethods.forEach((method: any) => {
       if (method.dependencies && method.dependencies.length > 0) {
         method.dependencies.forEach((depId: string) => {
           if (methodMap[depId]) {
@@ -587,6 +621,7 @@ const FlowCanvas = ({
     setNodes(newNodes);
     setEdges(newEdges);
   };
+
   return (
     <div className="w-full h-full border rounded-lg overflow-hidden bg-background flex flex-col">
       <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
@@ -609,6 +644,15 @@ const FlowCanvas = ({
                 : "Loading flow structure..."}
             </p>
           </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4">
+          <Alert>
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         </div>
       )}
 
@@ -646,6 +690,15 @@ const FlowCanvas = ({
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{
+            padding: 0.2, // Add padding around the view
+            includeHiddenNodes: false,
+            minZoom: 0.1, // Allow zooming out more
+            maxZoom: 1.5,
+          }}
+          minZoom={0.1}
+          maxZoom={2}
+          defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         >
           <Background />
           <Controls />
