@@ -191,12 +191,33 @@ def extract_flows_from_file(file_path: str) -> List[FlowInfo]:
             try:
                 spec.loader.exec_module(module)
             except ImportError as e:
-                # Log import errors but continue with other files
-                logger.debug(f"Import error executing module {file_path}: {str(e)}")
-                # Clean up module from sys.modules
-                if module_name in sys.modules:
-                    del sys.modules[module_name]
-                return []
+                # Attempt to gracefully handle optional / missing third-party dependencies
+                missing_mod = _extract_missing_module_name(str(e))
+                if missing_mod and missing_mod not in sys.modules:
+                    logger.debug(
+                        f"Missing dependency '{missing_mod}' when loading {file_path}. "
+                        "Creating a stub so flow inspection can continue."
+                    )
+                    _install_stub_module(missing_mod)
+                    try:
+                        # Retry executing the module now that the stub exists
+                        spec.loader.exec_module(module)
+                    except Exception as inner_e:
+                        logger.debug(
+                            f"Retry after stubbing '{missing_mod}' failed for {file_path}: {inner_e}"
+                        )
+                        if module_name in sys.modules:
+                            del sys.modules[module_name]
+                        return []
+                else:
+                    # Log import errors but continue with other files
+                    logger.debug(
+                        f"Import error executing module {file_path}: {str(e)}"
+                    )
+                    # Clean up module from sys.modules
+                    if module_name in sys.modules:
+                        del sys.modules[module_name]
+                    return []
             except Exception as e:
                 # Log other errors
                 logger.debug(f"Error executing module {file_path}: {str(e)}")
@@ -596,6 +617,56 @@ def _analyze_method_from_source(
     except Exception as e:
         logger.debug(f"Error analyzing method {method_name}: {str(e)}")
         return None
+
+
+import types
+
+def _extract_missing_module_name(err_msg: str) -> Optional[str]:
+    """Extract the missing module name from an ImportError message."""
+    # Typical message formats:
+    #   "No module named 'foo'"
+    #   "No module named foo.bar; 'foo' is not a package"
+    pattern = r"No module named ['\"](?P<name>[a-zA-Z0-9_\.]+)['\"]"
+    match = re.search(pattern, err_msg)
+    return match.group("name") if match else None
+
+
+def _install_stub_module(module_name: str):
+    """Insert a dummy/stub module into sys.modules so importlib can succeed.
+
+    The stub will lazily create submodules on attribute access to support
+    statements such as ``import foo.bar`` as well.
+    """
+    if module_name in sys.modules:
+        return
+
+    parts = module_name.split(".")
+    for i in range(1, len(parts) + 1):
+        sub_name = ".".join(parts[:i])
+        if sub_name not in sys.modules:
+            stub = types.ModuleType(sub_name)
+            # Provide a placeholder that raises on attribute usage to avoid
+            # silent failures further down the line.
+            def _getattr_stub(name):
+                if name in stub.__dict__:
+                    return stub.__dict__[name]
+                else:
+                    class _Dummy:
+                        def __init__(self, *args, **kwargs):
+                            pass
+
+                        def __call__(self, *args, **kwargs):  # type: ignore
+                            return None
+
+                        def __getattr__(self, _item):  # type: ignore
+                            return _Dummy()
+
+                    dummy = _Dummy()
+                    stub.__dict__[name] = dummy
+                    return dummy
+
+            stub.__getattr__ = _getattr_stub  # type: ignore
+            sys.modules[sub_name] = stub
 
 
 def _determine_state_type(flow_class, file_content: str) -> Tuple[str, Optional[str]]:
