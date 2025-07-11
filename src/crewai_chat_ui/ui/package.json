@@ -13,6 +13,7 @@
     "@assistant-ui/react": "^0.8.6",
     "@assistant-ui/react-ai-sdk": "^0.8.0",
     "@assistant-ui/react-markdown": "^0.8.0",
+    "@dagrejs/dagre": "^1.1.5",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-scroll-area": "^1.2.9",
@@ -40,6 +41,7 @@
   "devDependencies": {
     "@react-router/dev": "^7.4.0",
     "@tailwindcss/vite": "^4.0.0",
+    "@types/dagre": "^0.7.53",
     "@types/node": "^20",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",

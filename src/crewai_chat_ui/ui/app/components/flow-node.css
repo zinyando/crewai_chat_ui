@@ -1,0 +1,33 @@
+/* CSS for consistent node dimensions */
+/* Target all React Flow nodes */
+.react-flow__node {
+  width: 220px !important;
+  height: 100px !important;
+}
+
+/* Ensure the inner content of nodes is properly sized */
+.react-flow__node > div {
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden;
+}
+
+/* Ensure consistent padding and styling */
+.react-flow__node .px-4 {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+/* Fix for any min-width or min-height settings */
+.react-flow__node [class*="min-w-"],
+.react-flow__node [class*="min-h-"] {
+  min-width: unset !important;
+  min-height: unset !important;
+}
+
+/* Fix for any max-width or max-height settings */
+.react-flow__node [class*="max-w-"],
+.react-flow__node [class*="max-h-"] {
+  max-width: unset !important;
+  max-height: unset !important;
+}

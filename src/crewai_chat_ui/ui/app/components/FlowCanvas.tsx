@@ -14,14 +14,93 @@ import {
 } from "@xyflow/react";
 import type { Node, Edge, NodeTypes } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import dagre from "@dagrejs/dagre";
 import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import "./flow-node.css";
 
 // Initial empty arrays with proper types
 const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
+
+/**
+ * Helper utilities for laying out a React Flow graph using dagre.
+ */
+const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+
+// Fixed node dimensions for all nodes
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 100;
+
+/**
+ * Helper function to get node dimensions - all nodes have the same size
+ */
+const getNodeDimensions = (node: Node): { width: number; height: number } => {
+  return { width: NODE_WIDTH, height: NODE_HEIGHT };
+};
+
+/**
+ * Layout nodes and edges using Dagre algorithm
+ * @returns Object containing layouted nodes, edges, and graph dimensions
+ */
+function getLayoutedElements(
+  nodes: Node[],
+  edges: Edge[],
+  direction: "TB" | "LR" = "TB"
+): { nodes: Node[]; edges: Edge[]; fullWidth: number; fullHeight: number } {
+  // Clear the graph to avoid stale data
+  dagreGraph.setGraph({});
+
+  // Set the graph direction
+  dagreGraph.setGraph({ rankdir: direction, ranksep: 100, nodesep: 80 });
+
+  // Reset the graph before layout
+  nodes.forEach((node) => {
+    dagreGraph.removeNode(node.id);
+  });
+
+  // Add nodes to the graph with consistent dimensions
+  nodes.forEach((node) => {
+    // Use the fixed dimensions directly for consistent node sizing
+    dagreGraph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+  });
+
+  // Add edges to the graph
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  // Run the layout algorithm
+  dagre.layout(dagreGraph);
+
+  // Get graph dimensions for viewport adjustments
+  const graphData = dagreGraph.graph();
+  const fullWidth = graphData && graphData.width ? graphData.width / 2 : 0;
+  const fullHeight = graphData && graphData.height ? graphData.height / 2 : 0;
+
+  // Update node positions based on the dagre layout results
+  const layoutedNodes = nodes.map((node) => {
+    const dagreNode = dagreGraph.node(node.id);
+
+    if (!dagreNode) {
+      console.warn(`No dagre node found for id: ${node.id}`);
+      return node;
+    }
+
+    return {
+      ...node,
+      position: {
+        // Use fixed dimensions for consistent positioning
+        x: dagreNode.x - NODE_WIDTH / 2,
+        y: dagreNode.y - NODE_HEIGHT / 2,
+      },
+    };
+  });
+
+  return { nodes: layoutedNodes, edges, fullWidth, fullHeight };
+}
 
 interface FlowCanvasProps {
   flowId: string;
@@ -67,7 +146,7 @@ const FlowNode = ({ data }: { data: any }) => {
   };
 
   return (
-    <div className="px-4 py-2 shadow-md rounded-md border bg-card">
+    <div className="px-4 py-2 shadow-md rounded-md border bg-card w-[220px] h-[100px] flex flex-col justify-center">
       <div className="flex flex-col">
         <div className="flex items-center">
           <div
@@ -164,7 +243,7 @@ const StepNode = ({ data }: { data: any }) => {
 
 const OutputNode = ({ data }: { data: any }) => {
   return (
-    <div className="px-4 py-2 shadow-md rounded-md border bg-card min-w-[250px]">
+    <div className="px-4 py-2 shadow-md rounded-md border bg-card w-[220px] h-[100px] flex flex-col justify-center">
       <div className="flex flex-col">
         <div className="font-bold mb-2">Flow Output</div>
         <div className="text-xs overflow-auto max-h-[200px]">
@@ -237,6 +316,9 @@ const FlowCanvas = ({
   const [state, setState] = useState<FlowState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Layout direction state (TB = top-to-bottom, LR = left-to-right)
+  const [layoutDirection, setLayoutDirection] = useState<"TB" | "LR">("TB");
 
   // State for initialization view
   const [flowStructure, setFlowStructure] = useState<any>(null);
@@ -487,9 +569,14 @@ const FlowCanvas = ({
       });
     }
 
-    setNodes(newNodes);
-    setEdges(newEdges);
-  }, [state, setNodes, setEdges]);
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      newNodes,
+      newEdges,
+      layoutDirection
+    );
+    setNodes(layoutedNodes);
+    setEdges(layoutedEdges);
+  }, [state, setNodes, setEdges, layoutDirection]);
 
   // Helper function to get color based on status
   const getStatusColor = (status: string) => {
@@ -618,14 +705,19 @@ const FlowCanvas = ({
       }
     });
 
-    setNodes(newNodes);
-    setEdges(newEdges);
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      newNodes,
+      newEdges,
+      layoutDirection
+    );
+    setNodes(layoutedNodes);
+    setEdges(layoutedEdges);
   };
 
   return (
     <div className="w-full h-full border rounded-lg overflow-hidden bg-background flex flex-col">
       <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
-        <h3 className="font-semibold text-lg">Crew Execution Visualization</h3>
+        <h3 className="font-semibold text-lg">Flow Visualization</h3>
         <Button
           variant="outline"
           size="sm"
