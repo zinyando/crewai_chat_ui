@@ -129,34 +129,19 @@ async def _execute_flow_async(flow_id: str, inputs: Dict[str, Any]):
     try:
         flow_info = flows_cache[flow_id]
         
-        # Create a trace entry
-        trace_id = f"trace_{len(flow_traces.get(flow_id, []))}"
-        trace = {
-            "id": trace_id,
-            "flow_id": flow_id,
-            "flow_name": flow_info.name,
-            "status": "initializing",
-            "start_time": asyncio.get_event_loop().time(),
-            "nodes": {},
-            "edges": [],
-            "events": []
-        }
+        # Get the existing flow state and trace that were created in execute_flow
+        if flow_id not in active_flows:
+            logger.error(f"No active flow state found for flow {flow_id}")
+            return
+            
+        flow_state = active_flows[flow_id]
         
-        # Store trace
-        if flow_id not in flow_traces:
-            flow_traces[flow_id] = []
-        flow_traces[flow_id].append(trace)
-        
-        # Initialize flow state for WebSocket updates
-        flow_state = {
-            "flow_id": flow_id,
-            "status": "initializing",
-            "steps": [],
-            "outputs": {},
-            "errors": [],
-            "timestamp": asyncio.get_event_loop().time()
-        }
-        active_flows[flow_id] = flow_state
+        # Get the latest trace for this flow
+        if flow_id not in flow_traces or not flow_traces[flow_id]:
+            logger.error(f"No trace found for flow {flow_id}")
+            return
+            
+        trace = flow_traces[flow_id][-1]
         
         # Send initial state update via WebSocket
         await broadcast_flow_update(flow_id, {
@@ -340,12 +325,45 @@ async def execute_flow(
         raise HTTPException(status_code=404, detail="Flow not found")
     
     try:
+        flow_info = flows_cache[flow_id]
+        
+        # Create a trace entry immediately to ensure it exists before WebSocket connection
+        trace_id = f"trace_{len(flow_traces.get(flow_id, []))}"
+        trace = {
+            "id": trace_id,
+            "flow_id": flow_id,
+            "flow_name": flow_info.name,
+            "status": "initializing",
+            "start_time": asyncio.get_event_loop().time(),
+            "nodes": {},
+            "edges": [],
+            "events": []
+        }
+        
+        # Store trace
+        if flow_id not in flow_traces:
+            flow_traces[flow_id] = []
+        flow_traces[flow_id].append(trace)
+        
+        # Initialize flow state for WebSocket updates
+        flow_state = {
+            "flow_id": flow_id,
+            "status": "initializing",
+            "steps": [],
+            "outputs": {},
+            "errors": [],
+            "timestamp": asyncio.get_event_loop().time()
+        }
+        active_flows[flow_id] = flow_state
+        
         # Start flow execution in background
         background_tasks.add_task(_execute_flow_async, flow_id, request.inputs)
         
         return {
             "status": "success",
-            "detail": f"Flow {flow_id} execution started"
+            "detail": f"Flow {flow_id} execution started",
+            "flow_id": flow_id,
+            "trace_id": trace_id
         }
     
     except Exception as e:

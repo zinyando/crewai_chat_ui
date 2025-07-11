@@ -680,11 +680,26 @@ async def flow_websocket_endpoint(websocket: WebSocket, flow_id: str):
     try:
         # Get the flow execution from the flow API's active flows cache
         flow_execution = get_active_execution(flow_id)
+        
+        # If no active execution is found, wait a short time for it to be created
+        # This helps with race conditions where the WebSocket connects before the flow is fully initialized
         if not flow_execution:
+            logging.info(f"No active execution found for flow {flow_id}, waiting for initialization...")
+            # Wait up to 5 seconds for the flow execution to be created
+            for _ in range(10):
+                await asyncio.sleep(0.5)
+                flow_execution = get_active_execution(flow_id)
+                if flow_execution:
+                    logging.info(f"Flow execution for {flow_id} found after waiting")
+                    break
+        
+        # If still no execution found after waiting, send error
+        if not flow_execution:
+            logging.error(f"No active execution found for flow {flow_id} after waiting")
             await websocket.send_json(
                 {
                     "type": "error",
-                    "message": f"No active execution found for flow {flow_id}",
+                    "message": f"No active execution found for flow {flow_id}. Please try running the flow again.",
                 }
             )
             await websocket.close()
