@@ -308,7 +308,9 @@ const FlowNode = ({ data }: { data: any }) => {
   return (
     <div
       ref={ref}
-      className="px-4 py-2 shadow-md rounded-md border bg-card flex flex-col justify-center"
+      className={`px-4 py-2 shadow-md rounded-md border bg-card flex flex-col justify-center ${
+        data.uniformWidth && data.uniformHeight ? 'uniform-sized' : ''
+      }`}
       style={nodeStyle}
     >
       <div className="flex flex-col h-full justify-center">
@@ -377,7 +379,9 @@ const StepNode = ({ data }: { data: any }) => {
   return (
     <div
       ref={ref}
-      className="px-4 py-2 shadow-md rounded-md border bg-card relative overflow-hidden"
+      className={`px-4 py-2 shadow-md rounded-md border bg-card relative overflow-hidden ${
+        data.uniformWidth && data.uniformHeight ? 'uniform-sized' : ''
+      }`}
       style={nodeStyle}
     >
       {/* Handles for vertical flow - conditionally rendered */}
@@ -478,7 +482,9 @@ const OutputNode = ({ data }: { data: any }) => {
   return (
     <div
       ref={ref}
-      className="px-4 py-2 shadow-md rounded-md border bg-card overflow-hidden"
+      className={`px-4 py-2 shadow-md rounded-md border bg-card overflow-hidden ${
+        data.uniformWidth && data.uniformHeight ? 'uniform-sized' : ''
+      }`}
       style={nodeStyle}
     >
       <div className="flex flex-col h-full">
@@ -515,7 +521,9 @@ const MethodNode = ({ data }: { data: any }) => {
   return (
     <div
       ref={ref}
-      className="px-4 py-2 shadow-md rounded-md border bg-card relative overflow-hidden"
+      className={`px-4 py-2 shadow-md rounded-md border bg-card relative overflow-hidden ${
+        data.uniformWidth && data.uniformHeight ? 'uniform-sized' : ''
+      }`}
       style={nodeStyle}
     >
       {/* Handles for vertical flow - conditionally rendered */}

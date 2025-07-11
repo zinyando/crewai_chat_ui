@@ -1,21 +1,21 @@
 /* CSS for dynamic node dimensions */
 /* Base styling for all React Flow nodes */
 .react-flow__node {
-  min-width: 180px;
-  min-height: 80px;
-  max-width: 400px;
+  position: relative;
+  box-sizing: border-box;
 }
 
 /* Ensure the inner content of nodes is properly sized */
 .react-flow__node > div {
-  width: 100%;
-  height: 100%;
   overflow: hidden;
-  padding: 1rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background-color: var(--card);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
+}
+
+/* Override Tailwind's h-full class when uniform sizing is applied */
+.react-flow__node .uniform-sized .h-full {
+  height: 100% !important;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Ensure text content doesn't overflow */
